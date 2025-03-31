@@ -1,0 +1,20 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+#/src/elliptic/SCL_mulmuladd_gen_b4.sol
+#/test/SCL_ecgen_b4.t.sol
+/.DS_Store
+/doc/.DS_Store
+/src/.DS_Store
+/src/elliptic/.DS_Store

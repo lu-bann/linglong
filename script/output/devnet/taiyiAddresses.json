@@ -1,0 +1,11 @@
+{
+  "taiyiAddresses": {
+    "eigenLayerMiddleware": "0xBb0B034cABFc0c1064a75BF868499d32130e25b0",
+    "gatewayAVS": "0x213391B28b4BE75543cB6455CDC46F36602507c8",
+    "reverter": "0x86A4F08103eade88adE0be164d7BDa8Fe166680d",
+    "taiyiCore": "0x12d452d4005A007d15a7B98f461fBd30aF8EE9d1",
+    "taiyiProposerRegistry": "0x4093cCcdfA33AA588f9Ae4c89C3a15B1297d3E1f",
+    "validatorAVS": "0xBb0B034cABFc0c1064a75BF868499d32130e25b0",
+    "weth": "0x0A79920c296E86e7BB12Ad20ca7Ffbbd7AE5905B"
+  }
+}
