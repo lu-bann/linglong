@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { TaiyiCore } from "../src/TaiyiCore.sol";
+import { TaiyiCore } from "../src/taiyi/TaiyiCore.sol";
 
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";

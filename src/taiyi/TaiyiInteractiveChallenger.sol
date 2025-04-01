@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { ITaiyiInteractiveChallenger } from "./interfaces/ITaiyiInteractiveChallenger.sol";
-import { ITaiyiParameterManager } from "./interfaces/ITaiyiParameterManager.sol";
-import { PreconfRequestAType } from "./types/PreconfRequestATypes.sol";
-import { PreconfRequestBType } from "./types/PreconfRequestBTypes.sol";
+import { ITaiyiInteractiveChallenger } from
+    "../interfaces/ITaiyiInteractiveChallenger.sol";
+import { ITaiyiParameterManager } from "../interfaces/ITaiyiParameterManager.sol";
+import { PreconfRequestAType } from "../types/PreconfRequestATypes.sol";
+import { PreconfRequestBType } from "../types/PreconfRequestBTypes.sol";
 import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { ECDSA } from "@openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 

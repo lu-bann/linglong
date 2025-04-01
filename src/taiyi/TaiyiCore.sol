@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import { ITaiyiCore } from "../interfaces/ITaiyiCore.sol";
+import { PreconfRequestLib } from "../libs/PreconfRequestLib.sol";
+import { TaiyiCoreStorage } from "../storage/TaiyiCoreStorage.sol";
 import { TaiyiEscrow } from "./TaiyiEscrow.sol";
-import { ITaiyiCore } from "./interfaces/ITaiyiCore.sol";
-import { PreconfRequestLib } from "./libs/PreconfRequestLib.sol";
-import { TaiyiCoreStorage } from "./storage/TaiyiCoreStorage.sol";
 
-import { SlotLib } from "./libs/SlotLib.sol";
-import { PreconfRequestStatus } from "./types/CommonTypes.sol";
+import { SlotLib } from "../libs/SlotLib.sol";
+import { PreconfRequestStatus } from "../types/CommonTypes.sol";
 import {
     BlockspaceAllocation, PreconfRequestBType
-} from "./types/PreconfRequestBTypes.sol";
+} from "../types/PreconfRequestBTypes.sol";
 
-import { Helper } from "./utils/Helper.sol";
+import { Helper } from "../utils/Helper.sol";
 
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -21,8 +21,6 @@ import { UUPSUpgradeable } from
 import { ECDSA } from "@openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import { SignatureChecker } from
     "@openzeppelin-contracts/contracts/utils/cryptography/SignatureChecker.sol";
-
-import "forge-std/console.sol";
 
 contract TaiyiCore is
     OwnableUpgradeable,

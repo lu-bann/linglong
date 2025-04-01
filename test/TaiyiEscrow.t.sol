@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "../src/TaiyiCore.sol";
-import "../src/TaiyiEscrow.sol";
 import "../src/interfaces/ITaiyiCore.sol";
 import "../src/libs/PreconfRequestLib.sol";
+import "../src/taiyi/TaiyiCore.sol";
+import "../src/taiyi/TaiyiEscrow.sol";
 
 import { TransparentUpgradeableProxy } from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";

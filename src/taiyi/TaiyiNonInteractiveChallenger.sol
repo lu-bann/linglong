@@ -2,9 +2,9 @@
 pragma solidity ^0.8.25;
 
 import { ITaiyiNonInteractiveChallenger } from
-    "./interfaces/ITaiyiNonInteractiveChallenger.sol";
-import { PreconfRequestAType } from "./types/PreconfRequestATypes.sol";
-import { PreconfRequestBType } from "./types/PreconfRequestBTypes.sol";
+    "../interfaces/ITaiyiNonInteractiveChallenger.sol";
+import { PreconfRequestAType } from "../types/PreconfRequestATypes.sol";
+import { PreconfRequestBType } from "../types/PreconfRequestBTypes.sol";
 import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { ISP1Verifier } from "@sp1-contracts/ISP1Verifier.sol";
 
