@@ -14,7 +14,7 @@ package-lock.json
 pnpm-lock.yaml
 yarn.lock
 
-# broadcasts
+# broadcasts (keep deployment info)
 !broadcast
 broadcast/*
 broadcast/*/31337/
