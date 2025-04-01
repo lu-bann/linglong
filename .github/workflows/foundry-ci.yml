@@ -8,6 +8,7 @@ on:
 env:
   FOUNDRY_PROFILE: ci
 
+
 jobs:
   build-foundry:
     name: Foundry Project
@@ -31,6 +32,7 @@ jobs:
       - name: Run Forge tests
         run: |
           forge test -vvvv
+
         id: test
       
       - name: Check code formatting
