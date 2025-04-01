@@ -1,5 +1,8 @@
 # LingLong 
 
+![2025-03-31 23 37 34](https://github.com/user-attachments/assets/898f073f-c7e4-46ce-8261-b43c355da8d6)
+
+
 > 🚧 **NOTICE** 🔨 This repository is under active development. Features may change, interfaces are not stable, and the codebase is evolving rapidly. 
 
 ## 1. Overview
