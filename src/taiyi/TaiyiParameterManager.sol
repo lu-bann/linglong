@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { ITaiyiParameterManager } from "./interfaces/ITaiyiParameterManager.sol";
+import { ITaiyiParameterManager } from "../interfaces/ITaiyiParameterManager.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from

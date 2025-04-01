@@ -4,11 +4,11 @@ pragma solidity ^0.8.25;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
-import { TaiyiInteractiveChallenger } from "../src/TaiyiInteractiveChallenger.sol";
-
-import { TaiyiParameterManager } from "../src/TaiyiParameterManager.sol";
 import { ITaiyiInteractiveChallenger } from
     "../src/interfaces/ITaiyiInteractiveChallenger.sol";
+import { TaiyiInteractiveChallenger } from "../src/taiyi/TaiyiInteractiveChallenger.sol";
+import { PublicValuesStruct } from "../src/taiyi/TaiyiInteractiveChallenger.sol";
+import { TaiyiParameterManager } from "../src/taiyi/TaiyiParameterManager.sol";
 
 import { PreconfRequestAType } from "../src/types/PreconfRequestATypes.sol";
 import {

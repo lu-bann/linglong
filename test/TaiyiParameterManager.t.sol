@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
-import { TaiyiParameterManager } from "../src/TaiyiParameterManager.sol";
+import { TaiyiParameterManager } from "../src/taiyi/TaiyiParameterManager.sol";
 
 import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { TransparentUpgradeableProxy } from

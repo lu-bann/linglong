@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { TaiyiCore } from "../src/TaiyiCore.sol";
-import { TaiyiEscrow } from "../src/TaiyiEscrow.sol";
 import { ITaiyiCore } from "../src/interfaces/ITaiyiCore.sol";
+import { TaiyiCore } from "../src/taiyi/TaiyiCore.sol";
+import { TaiyiEscrow } from "../src/taiyi/TaiyiEscrow.sol";
 
 import { PreconfRequestLib } from "../src/libs/PreconfRequestLib.sol";
 import {
