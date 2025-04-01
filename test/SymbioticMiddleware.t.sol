@@ -68,7 +68,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         bytes4 functionSig
     )
         external
-        view
+        pure
         returns (bool)
     {
         // Allow setupSubnetworks to be called by anyone during tests
