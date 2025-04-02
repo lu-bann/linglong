@@ -14,12 +14,11 @@ import { EnumerableSet } from
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
-import { AVSDirectoryStorage } from
-    "@eigenlayer-contracts/src/contracts/core/AVSDirectoryStorage.sol";
-import { DelegationManagerStorage } from
-    "@eigenlayer-contracts/src/contracts/core/DelegationManagerStorage.sol";
-import { StrategyManagerStorage } from
-    "@eigenlayer-contracts/src/contracts/core/StrategyManagerStorage.sol";
+import { AVSDirectory } from "@eigenlayer-contracts/src/contracts/core/AVSDirectory.sol";
+import { DelegationManager } from
+    "@eigenlayer-contracts/src/contracts/core/DelegationManager.sol";
+import { StrategyManager } from
+    "@eigenlayer-contracts/src/contracts/core/StrategyManager.sol";
 import { IAVSDirectory } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAVSDirectory.sol";
 import { IDelegationManager } from
@@ -128,7 +127,7 @@ contract EigenLayerMiddleware is
         __UUPSUpgradeable_init();
 
         AVS_DIRECTORY = IAVSDirectory(_avsDirectory);
-        DELEGATION_MANAGER = DelegationManagerStorage(_delegationManager);
+        DELEGATION_MANAGER = DelegationManager(_delegationManager);
         REWARDS_COORDINATOR = IRewardsCoordinator(_rewardCoordinator);
         _setRewardsInitiator(_rewardInitiator);
         UNDERWRITER_SHARE_BIPS = _underwriterShareBips;
