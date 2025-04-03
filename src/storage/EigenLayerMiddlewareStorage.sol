@@ -14,7 +14,6 @@ import { IEigenPodManager } from
     "@eigenlayer-contracts/src/contracts/interfaces/IEigenPodManager.sol";
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
-
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { Registry } from "@urc/Registry.sol";
@@ -47,7 +46,9 @@ import { Registry } from "@urc/Registry.sol";
 // |---------------------------+-------------------------------------------------------------------------------+------+--------+-------+-------------------------------------------------------------------------|
 // | REWARD_DURATION           | uint256                                                                       | 11   | 0      | 32    | src/storage/EigenLayerMiddlewareStorage.sol:EigenLayerMiddlewareStorage |
 // |---------------------------+-------------------------------------------------------------------------------+------+--------+-------+-------------------------------------------------------------------------|
-// | __gap                     | uint256[50]                                                                   | 12   | 0      | 1600  | src/storage/EigenLayerMiddlewareStorage.sol:EigenLayerMiddlewareStorage |
+// | SLASHER                   | address                                                                       | 12   | 0      | 20    | src/storage/EigenLayerMiddlewareStorage.sol:EigenLayerMiddlewareStorage |
+// |---------------------------+-------------------------------------------------------------------------------+------+--------+-------+-------------------------------------------------------------------------|
+// | __gap                     | uint256[50]                                                                   | 13   | 0      | 1600  | src/storage/EigenLayerMiddlewareStorage.sol:EigenLayerMiddlewareStorage |
 // ╰---------------------------+-------------------------------------------------------------------------------+------+--------+-------+-------------------------------------------------------------------------╯
 
 abstract contract EigenLayerMiddlewareStorage is IEigenLayerMiddleware {
@@ -90,6 +91,12 @@ abstract contract EigenLayerMiddlewareStorage is IEigenLayerMiddleware {
 
     /// @notice Reward duration
     uint256 public REWARD_DURATION;
+
+    /// @notice Slasher contract
+    address public SLASHER;
+
+    /// @notice Allocation Manager contract
+    address public ALLOCATION_MANAGER;
 
     uint256[50] private __gap;
 }

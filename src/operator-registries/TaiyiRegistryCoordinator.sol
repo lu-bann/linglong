@@ -108,12 +108,10 @@ contract TaiyiRegistryCoordinator is
         _registerOperator(operator, operatorSetIds, data);
     }
 
-    /**
-     * @notice Registers an operator with the AVS using a service type ID
-     * @param operator The address of the operator to register
-     * @param serviceTypeId The service type ID that defines what kind of operator this is
-     * @param data Additional data passed to the operator registrar
-     */
+    /// @notice Registers an operator with the AVS using a service type ID
+    /// @param operator The address of the operator to register
+    /// @param serviceTypeId The service type ID that defines what kind of operator this is
+    /// @param data Additional data passed to the operator registrar
     function registerOperatorWithServiceType(
         address operator,
         uint32 serviceTypeId,
@@ -248,26 +246,35 @@ contract TaiyiRegistryCoordinator is
 
         _deregisterOperatorFromOperatorSets(operator, operatorSetIds);
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        _operatorSets[operatorSetCounter].remove(operator);
+        for (uint32 i = 0; i < operatorSetIds.length; i++) {
+            _operatorSets[operatorSetIds[i]].remove(operator);
+        }
     }
 
     function createOperatorSet(IStrategy[] memory strategies)
         external
         onlyEigenlayerMiddleware
-        returns (uint32)
+        returns (uint32 operatorSetId)
     {
+        // Get the current operator set count from allocationManager
+        uint256 currentSetCount =
+            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+
+        // Use the current count as the next ID
+        operatorSetId = uint32(currentSetCount);
+
         IAllocationManagerTypes.CreateSetParams[] memory createSetParams =
             new IAllocationManagerTypes.CreateSetParams[](1);
 
         createSetParams[0] = IAllocationManagerTypes.CreateSetParams({
-            operatorSetId: operatorSetCounter,
+            operatorSetId: operatorSetId,
             strategies: strategies
         });
-        allocationManager.createOperatorSets({
-            avs: eigenlayerMiddleware,
-            params: createSetParams
-        });
-        operatorSetCounter++;
+
+        console.log("createOperatorSets", msg.sender);
+        allocationManager.createOperatorSets(eigenlayerMiddleware, createSetParams);
+
+        return operatorSetId;
     }
 
     function getOperatorSetOperators(uint32 operatorSetId)
@@ -318,7 +325,11 @@ contract TaiyiRegistryCoordinator is
         view
         returns (address[] memory)
     {
-        if (operatorSetId >= operatorSetCounter) {
+        // Get the current operator set count to validate the requested ID
+        uint256 currentSetCount =
+            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+
+        if (operatorSetId >= currentSetCount) {
             revert OperatorSetNotFound(operatorSetId);
         }
         // Use our stored operator set instead of calling allocationManager
@@ -499,6 +510,17 @@ contract TaiyiRegistryCoordinator is
         returns (OperatorSet[] memory, IAllocationManagerTypes.Allocation[] memory)
     {
         return allocationManager.getStrategyAllocations(operator, strategy);
+    }
+
+    /// @notice Returns all operator sets that an operator has allocated magnitude to
+    /// @param operator The operator whose allocated sets to fetch
+    /// @return Array of operator sets that the operator has allocated magnitude to
+    function getOperatorSetsFromOperator(address operator)
+        external
+        view
+        returns (OperatorSet[] memory)
+    {
+        return allocationManager.getAllocatedSets(operator);
     }
 
     /// ========================================================================================

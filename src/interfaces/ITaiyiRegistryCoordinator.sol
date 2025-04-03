@@ -286,4 +286,12 @@ interface ITaiyiRegistryCoordinator {
         external
         view
         returns (bytes32);
+
+    /// @notice Returns all operator sets that an operator has allocated magnitude to
+    /// @param operator The operator whose allocated sets to fetch
+    /// @return Array of operator sets that the operator has allocated magnitude to
+    function getOperatorSetsFromOperator(address operator)
+        external
+        view
+        returns (OperatorSet[] memory);
 }
