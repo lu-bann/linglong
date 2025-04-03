@@ -12,7 +12,7 @@ import {
     BlockspaceAllocation, PreconfRequestBType
 } from "../types/PreconfRequestBTypes.sol";
 
-import { Helper } from "../utils/Helper.sol";
+import { ECDSAHelper } from "../libs/ECDSAHelper.sol";
 
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -31,7 +31,7 @@ contract TaiyiCore is
 {
     using PreconfRequestLib for *;
     using SignatureChecker for address;
-    using Helper for bytes;
+    using ECDSAHelper for bytes;
 
     ///////////////////////////////////////////////////////////////
     /// EVENTS
@@ -172,19 +172,19 @@ contract TaiyiCore is
         bytes32 blockspaceAllocationHash =
             blockspaceAllocation.getBlockspaceAllocationHash();
 
-        Helper.verifySignature(
+        ECDSAHelper.verifySignature(
             blockspaceAllocationHash,
             blockspaceAllocation.sender,
             preconfRequestBType.blockspaceAllocationSignature,
             "invalid blockspace allocation signature"
         );
-        Helper.verifySignature(
+        ECDSAHelper.verifySignature(
             preconfRequestBType.blockspaceAllocationSignature,
             blockspaceAllocation.recipient,
             preconfRequestBType.gatewaySignedBlockspaceAllocation,
             "invalid gateway signature"
         );
-        Helper.verifySignature(
+        ECDSAHelper.verifySignature(
             preconfRequestBType.rawTx,
             blockspaceAllocation.recipient,
             preconfRequestBType.gatewaySignedRawTx,

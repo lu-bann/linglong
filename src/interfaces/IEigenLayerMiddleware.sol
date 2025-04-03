@@ -70,7 +70,9 @@ interface IEigenLayerMiddleware {
         address delegateeAddress,
         bytes[] calldata data
     )
-        external;
+        external
+        payable
+        returns (bytes32 registrationRoot);
 
     function unregisterValidators(bytes32 registrationRoot) external;
 

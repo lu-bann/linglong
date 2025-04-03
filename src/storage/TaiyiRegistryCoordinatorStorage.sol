@@ -27,8 +27,6 @@ import { EnumerableSet } from
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | allocationManager    | contract IAllocationManager                                          | 3    | 0      | 20    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
-// | operatorSetCounter   | uint32                                                               | 3    | 20     | 4     | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
-// |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorSets        | mapping(uint32 => struct EnumerableSet.AddressSet)                   | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorInfo        | mapping(address => struct ITaiyiRegistryCoordinator.OperatorInfo)    | 5    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
@@ -65,9 +63,6 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     /// EigenLayer contracts
     /// @notice the AllocationManager that tracks OperatorSets and Slashing in EigenLayer
     IAllocationManager public allocationManager;
-
-    /// @notice the current number of operator sets supported by the registry coordinator
-    uint32 public operatorSetCounter;
 
     /// @notice maps operator set id => operator addresses
     mapping(uint32 => EnumerableSet.AddressSet) internal _operatorSets;

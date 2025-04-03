@@ -264,7 +264,7 @@ contract SymbioticNetworkMiddleware is
         bytes memory signature
     )
         internal
-        view
+        pure
     {
         // For address-based verification, we expect the key to be an encoded address
         // and the signature to be empty or a valid ECDSA signature
