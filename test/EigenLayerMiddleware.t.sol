@@ -795,6 +795,7 @@ contract EigenlayerMiddlewareTest is Test {
     function _createRegistration(
         uint256 secretKey,
         address ownerAddress
+
     )
         internal
         view
@@ -803,6 +804,7 @@ contract EigenlayerMiddlewareTest is Test {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
         BLS.G2Point memory signature =
             _createRegistrationSignature(secretKey, ownerAddress);
+
         return IRegistry.Registration({ pubkey: pubkey, signature: signature });
     }
 
@@ -810,12 +812,14 @@ contract EigenlayerMiddlewareTest is Test {
     function _createRegistrationSignature(
         uint256 secretKey,
         address ownerAddress
+
     )
         internal
         view
         returns (BLS.G2Point memory)
     {
         bytes memory message = abi.encode(ownerAddress);
+
         return BLS.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
     }
 
