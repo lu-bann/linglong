@@ -11,8 +11,8 @@ import { UUPSUpgradeable } from
 
 import { PreconfRequestLib } from "../libs/PreconfRequestLib.sol";
 
+import { ECDSAHelper } from "../libs/ECDSAHelper.sol";
 import { BlockspaceAllocation } from "../types/PreconfRequestBTypes.sol";
-import { Helper } from "../utils/Helper.sol";
 import { ReentrancyGuardUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
 

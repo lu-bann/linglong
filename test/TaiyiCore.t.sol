@@ -7,12 +7,12 @@ import { TaiyiEscrow } from "../src/taiyi/TaiyiEscrow.sol";
 
 import { PreconfRequestLib } from "../src/libs/PreconfRequestLib.sol";
 
+import { ECDSAHelper } from "../src/libs/ECDSAHelper.sol";
 import { PreconfRequestStatus } from "../src/types/CommonTypes.sol";
 import {
     BlockspaceAllocation,
     PreconfRequestBType
 } from "../src/types/PreconfRequestBTypes.sol";
-import { Helper } from "../src/utils/Helper.sol";
 
 import { TransparentUpgradeableProxy } from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
@@ -20,7 +20,7 @@ import { Test, console } from "forge-std/Test.sol";
 
 contract TaiyiCoreTest is Test {
     using PreconfRequestLib for *;
-    using Helper for bytes;
+    using ECDSAHelper for bytes;
 
     TaiyiCore public taiyiCore;
 

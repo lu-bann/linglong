@@ -5,17 +5,17 @@ import { ITaiyiCore } from "../src/interfaces/ITaiyiCore.sol";
 import { TaiyiCore } from "../src/taiyi/TaiyiCore.sol";
 import { TaiyiEscrow } from "../src/taiyi/TaiyiEscrow.sol";
 
+import { ECDSAHelper } from "../src/libs/ECDSAHelper.sol";
 import { PreconfRequestLib } from "../src/libs/PreconfRequestLib.sol";
 import {
     BlockspaceAllocation,
     PreconfRequestBType
 } from "../src/types/PreconfRequestBTypes.sol";
-import { Helper } from "../src/utils/Helper.sol";
 import { Test, console } from "forge-std/Test.sol";
 
 contract DeployTest is Test {
     using PreconfRequestLib for BlockspaceAllocation;
-    using Helper for *;
+    using ECDSAHelper for *;
 
     TaiyiCore public taiyiCore;
     TaiyiEscrow public taiyiEscrow;
