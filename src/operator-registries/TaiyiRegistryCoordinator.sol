@@ -53,6 +53,19 @@ contract TaiyiRegistryCoordinator is
     using BN254 for BN254.G1Point;
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    // ======== NEW PROTOCOL TYPE HANDLING =======
+    
+    /// @notice Map middleware addresses to their protocol type
+    mapping(address => RestakingProtocol) public restakingProtocol;
+
+    /// @notice Set to track all registered middleware addresses
+    EnumerableSet.AddressSet internal restakingMiddleware;
+
+    /// @notice Emitted when a new middleware is added or updated
+    event RestakingMiddlewareUpdated(address previousMiddleware, address newMiddleware);
+    
+    // ======== END NEW PROTOCOL TYPE HANDLING =======
+
     modifier onlyAllocationManager() {
         _checkAllocationManager();
         _;
@@ -60,6 +73,12 @@ contract TaiyiRegistryCoordinator is
 
     modifier onlyEigenlayerMiddleware() {
         require(eigenlayerMiddleware == msg.sender, OnlyEigenlayerMiddleware());
+        _;
+    }
+
+    /// @notice Modifier that allows only registered middleware contracts to call a function
+    modifier onlyRestakingMiddleware() {
+        require(restakingMiddleware.contains(msg.sender), OnlyRestakingMiddleware());
         _;
     }
 
@@ -121,14 +140,20 @@ contract TaiyiRegistryCoordinator is
         onlyAllocationManager
         onlyWhenNotPaused(PAUSED_REGISTER_OPERATOR)
     {
-        // Convert serviceTypeId back to enum for internal processing
-        ITaiyiRegistryCoordinator.RestakingServiceTypes serviceType =
-            ServiceTypeLib.fromId(serviceTypeId);
+        if (restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
+            // Symbiotic protocol handling - convert subnetwork ID to operator set IDs
+            // For Symbiotic, the serviceTypeId directly maps to a subnetwork ID
+            _registerOperatorForSymbiotic(operator, serviceTypeId, data);
+        } else {
+            // Default EigenLayer handling
+            ITaiyiRegistryCoordinator.RestakingServiceTypes serviceType =
+                ServiceTypeLib.fromId(serviceTypeId);
 
-        // Get appropriate operator set IDs based on service type
-        uint32[] memory operatorSetIds = ServiceTypeLib.getOperatorSetIds(serviceType);
+            // Get appropriate operator set IDs based on service type
+            uint32[] memory operatorSetIds = ServiceTypeLib.getOperatorSetIds(serviceType);
 
-        _registerOperator(operator, operatorSetIds, data);
+            _registerOperator(operator, operatorSetIds, data);
+        }
     }
 
     /// @inheritdoc IAVSRegistrar
@@ -141,7 +166,13 @@ contract TaiyiRegistryCoordinator is
         onlyAllocationManager
         onlyWhenNotPaused(PAUSED_DEREGISTER_OPERATOR)
     {
-        _deregisterOperator(operator, operatorSetIds);
+        if (restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
+            // Symbiotic-specific deregistration logic
+            _deregisterOperatorForSymbiotic(operator, operatorSetIds);
+        } else {
+            // Default EigenLayer handling
+            _deregisterOperator(operator, operatorSetIds);
+        }
     }
 
     /// @inheritdoc ITaiyiRegistryCoordinator
@@ -194,6 +225,32 @@ contract TaiyiRegistryCoordinator is
         }
 
         emit RestakingMiddlewareUpdated(previousMiddleware, _restakingMiddleware);
+    }
+
+    /// @notice Sets the protocol type for a middleware address
+    /// @param _restakingMiddleware The middleware address
+    /// @param _restakingProtocol The protocol type (EIGENLAYER or SYMBIOTIC)
+    function setRestakingProtocol(
+        address _restakingMiddleware,
+        RestakingProtocol _restakingProtocol
+    )
+        external
+        onlyOwner
+    {
+        _setRestakingProtocol(_restakingMiddleware, _restakingProtocol);
+    }
+
+    /// @notice Gets all registered middleware addresses
+    /// @return Array of middleware addresses
+    function getRestakingMiddleware() external view returns (address[] memory) {
+        uint256 length = restakingMiddleware.length();
+        address[] memory middlewares = new address[](length);
+        
+        for (uint256 i = 0; i < length; i++) {
+            middlewares[i] = restakingMiddleware.at(i);
+        }
+        
+        return middlewares;
     }
 
     function _setRestakingProtocol(
@@ -253,12 +310,12 @@ contract TaiyiRegistryCoordinator is
 
     function createOperatorSet(IStrategy[] memory strategies)
         external
-        onlyEigenlayerMiddleware
+        onlyRestakingMiddleware
         returns (uint32 operatorSetId)
     {
         // Get the current operator set count from allocationManager
         uint256 currentSetCount =
-            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+            allocationManager.getOperatorSetCount(msg.sender);
 
         // Use the current count as the next ID
         operatorSetId = uint32(currentSetCount);
@@ -272,7 +329,7 @@ contract TaiyiRegistryCoordinator is
         });
 
         console.log("createOperatorSets", msg.sender);
-        allocationManager.createOperatorSets(eigenlayerMiddleware, createSetParams);
+        allocationManager.createOperatorSets(msg.sender, createSetParams);
 
         return operatorSetId;
     }
@@ -312,7 +369,7 @@ contract TaiyiRegistryCoordinator is
      */
     function getOperatorSetCount() external view returns (uint32) {
         // Convert uint256 to uint32 for the return value
-        return uint32(allocationManager.getOperatorSetCount(eigenlayerMiddleware));
+        return uint32(allocationManager.getOperatorSetCount(msg.sender));
     }
 
     /**
@@ -327,7 +384,7 @@ contract TaiyiRegistryCoordinator is
     {
         // Get the current operator set count to validate the requested ID
         uint256 currentSetCount =
-            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+            allocationManager.getOperatorSetCount(msg.sender);
 
         if (operatorSetId >= currentSetCount) {
             revert OperatorSetNotFound(operatorSetId);
@@ -342,7 +399,7 @@ contract TaiyiRegistryCoordinator is
         returns (IStrategy[] memory)
     {
         OperatorSet memory operatorSet =
-            OperatorSet({ avs: eigenlayerMiddleware, id: operatorSetId });
+            OperatorSet({ avs: msg.sender, id: operatorSetId });
         return allocationManager.getStrategiesInOperatorSet(operatorSet);
     }
 
@@ -351,13 +408,13 @@ contract TaiyiRegistryCoordinator is
         IStrategy[] memory strategies
     )
         external
-        onlyEigenlayerMiddleware
+        onlyRestakingMiddleware
     {
         uint256 operatorSetCount =
-            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+            allocationManager.getOperatorSetCount(msg.sender);
         require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
         allocationManager.addStrategiesToOperatorSet({
-            avs: eigenlayerMiddleware,
+            avs: msg.sender,
             operatorSetId: operatorSetId,
             strategies: strategies
         });
@@ -368,13 +425,13 @@ contract TaiyiRegistryCoordinator is
         IStrategy[] memory strategies
     )
         external
-        onlyEigenlayerMiddleware
+        onlyRestakingMiddleware
     {
         uint256 operatorSetCount =
-            allocationManager.getOperatorSetCount(eigenlayerMiddleware);
+            allocationManager.getOperatorSetCount(msg.sender);
         require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
         allocationManager.removeStrategiesFromOperatorSet({
-            avs: eigenlayerMiddleware,
+            avs: msg.sender,
             operatorSetId: operatorSetId,
             strategies: strategies
         });
@@ -387,10 +444,11 @@ contract TaiyiRegistryCoordinator is
         internal
         virtual
     {
+        address avs = msg.sender;
         allocationManager.deregisterFromOperatorSets(
             IAllocationManagerTypes.DeregisterParams({
                 operator: operator,
-                avs: eigenlayerMiddleware,
+                avs: avs,
                 operatorSetIds: operatorSetIds
             })
         );
@@ -474,7 +532,7 @@ contract TaiyiRegistryCoordinator is
         returns (IStrategy[] memory)
     {
         OperatorSet memory operatorSet =
-            OperatorSet({ avs: eigenlayerMiddleware, id: operatorSetId });
+            OperatorSet({ avs: msg.sender, id: operatorSetId });
         return allocationManager.getAllocatedStrategies(operator, operatorSet);
     }
 
@@ -493,7 +551,7 @@ contract TaiyiRegistryCoordinator is
         returns (IAllocationManagerTypes.Allocation memory)
     {
         OperatorSet memory operatorSet =
-            OperatorSet({ avs: eigenlayerMiddleware, id: operatorSetId });
+            OperatorSet({ avs: msg.sender, id: operatorSetId });
         return allocationManager.getAllocation(operator, operatorSet, strategy);
     }
 
@@ -587,5 +645,49 @@ contract TaiyiRegistryCoordinator is
         )
     {
         return abi.decode(data, (string, IPubkeyRegistry.PubkeyRegistrationParams));
+    }
+
+    // ======================================
+    // ======= SYMBIOTIC SPECIFIC ===========
+    // ======================================
+
+    /// @notice Register an operator for the Symbiotic protocol
+    /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs
+    /// @param operator The operator to register
+    /// @param subnetworkId The subnetwork ID (will be mapped to operator sets)
+    /// @param data Additional registration data
+    function _registerOperatorForSymbiotic(
+        address operator,
+        uint32 subnetworkId,
+        bytes calldata data
+    )
+        internal
+    {
+        // Convert subnetwork ID to operator set IDs based on Symbiotic protocol needs
+        uint32[] memory operatorSetIds = new uint32[](1);
+        
+        // For Symbiotic, we'll map each subnetwork to its own operator set with the same ID
+        // This allows compatibility with the existing operator set infrastructure
+        operatorSetIds[0] = subnetworkId;
+        
+        // Use the common registration path with the mapped operator set IDs
+        _registerOperator(operator, operatorSetIds, data);
+    }
+    
+    /// @notice Deregister an operator from the Symbiotic protocol
+    /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs for deregistration
+    /// @param operator The operator to deregister
+    /// @param subnetworkIds The subnetwork IDs (will be mapped to operator sets)
+    function _deregisterOperatorForSymbiotic(
+        address operator,
+        uint32[] memory subnetworkIds
+    )
+        internal
+    {
+        // For Symbiotic, we'll map each subnetwork to its own operator set with the same ID
+        // This allows compatibility with the existing operator set infrastructure
+        
+        // Use the common deregistration path with the mapped operator set IDs
+        _deregisterOperator(operator, subnetworkIds);
     }
 }

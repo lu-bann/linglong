@@ -36,9 +36,11 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Defines the type of restaking service used by the protocol
     /// @dev Used to specify which restaking mechanism an operator is using
+    /// @custom:enum NONE No restaking protocol assigned yet
     /// @custom:enum EIGENLAYER The operator is using EigenLayer for restaking
     /// @custom:enum SYMBIOTIC The operator is using Symbiotic for restaking
     enum RestakingProtocol {
+        NONE,
         EIGENLAYER,
         SYMBIOTIC
     }
