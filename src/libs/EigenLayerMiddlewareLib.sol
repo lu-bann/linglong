@@ -32,18 +32,20 @@ library EigenLayerMiddlewareLib {
     {
         // Cache array length to save gas on multiple accesses
         uint256 operatorSetsLength = operatorSets.length;
-        
+
         // First collect all strategies across all operator sets
         uint256 totalStrategiesCount = 0;
-        
+
         // Count total strategies first
         for (uint256 i = 0; i < operatorSetsLength;) {
             IStrategy[] memory setStrategies = registryCoordinator
                 .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
             totalStrategiesCount += setStrategies.length;
-            unchecked { ++i; } 
+            unchecked {
+                ++i;
+            }
         }
-        
+
         if (totalStrategiesCount == 0) {
             return new IStrategy[](0);
         }
@@ -57,27 +59,32 @@ library EigenLayerMiddlewareLib {
             IStrategy[] memory setStrategies = registryCoordinator
                 .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
             uint256 setStrategiesLength = setStrategies.length;
-            
+
             for (uint256 j = 0; j < setStrategiesLength;) {
                 allStrategies[allStrategiesLength] = address(setStrategies[j]);
-                unchecked { 
-                    ++allStrategiesLength; 
+                unchecked {
+                    ++allStrategiesLength;
                     ++j;
                 }
             }
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         // Use the deduplicate helper function to avoid code duplication
-        address[] memory uniqueStrategies = _deduplicateAddresses(allStrategies, allStrategiesLength);
-        
+        address[] memory uniqueStrategies =
+            _deduplicateAddresses(allStrategies, allStrategiesLength);
+
         // Convert addresses to IStrategy objects
         uint256 uniqueLength = uniqueStrategies.length;
         strategies = new IStrategy[](uniqueLength);
-        
+
         for (uint256 i = 0; i < uniqueLength;) {
             strategies[i] = IStrategy(uniqueStrategies[i]);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
 
         return strategies;
@@ -97,7 +104,7 @@ library EigenLayerMiddlewareLib {
     {
         return _deduplicateAddresses(allStrategies, allStrategiesLength);
     }
-    
+
     /// @notice Internal helper for deduplication to avoid code duplication
     /// @param addresses Array of addresses that may contain duplicates
     /// @param length Number of valid elements in the addresses array
@@ -113,45 +120,53 @@ library EigenLayerMiddlewareLib {
         if (length == 0) {
             return new address[](0);
         }
-        
+
         // Count unique addresses
         uint256 uniqueCount = 0;
-        
+
         // This is a temporary array to track which elements have been seen
         // We use an array of booleans instead of nested loops for better efficiency
         bool[] memory seen = new bool[](length);
-        
+
         for (uint256 i = 0; i < length;) {
             address current = addresses[i];
             bool isDuplicate = false;
-            
+
             // Check if this element already appeared earlier in the array
             for (uint256 j = 0; j < i;) {
                 if (addresses[j] == current) {
                     isDuplicate = true;
                     break;
                 }
-                unchecked { ++j; }
+                unchecked {
+                    ++j;
+                }
             }
-            
+
             if (!isDuplicate) {
                 seen[uniqueCount] = true;
                 addresses[uniqueCount] = current; // Move unique addresses to the start of the array
-                unchecked { ++uniqueCount; }
+                unchecked {
+                    ++uniqueCount;
+                }
             }
-            
-            unchecked { ++i; }
+
+            unchecked {
+                ++i;
+            }
         }
-        
+
         // Create result array with only the unique addresses
         result = new address[](uniqueCount);
-        
+
         // Copy unique addresses to the result array
         for (uint256 i = 0; i < uniqueCount;) {
             result[i] = addresses[i];
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
-        
+
         return result;
     }
 }

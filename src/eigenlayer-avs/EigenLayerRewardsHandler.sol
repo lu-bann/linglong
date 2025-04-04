@@ -397,7 +397,11 @@ contract EigenLayerRewardsHandler {
     /// @notice Helper to get an operator's active registration root
     /// @param operator The operator address
     /// @return The active registration root
-    function getActiveRegistrationRoot(address operator) public view returns (bytes32[] memory) {
+    function getActiveRegistrationRoot(address operator)
+        public
+        view
+        returns (bytes32[] memory)
+    {
         // Get all registration roots for this operator
         bytes32[] memory roots = middleware.getOperatorRegistrationRoots(operator);
         if (roots.length == 0) {

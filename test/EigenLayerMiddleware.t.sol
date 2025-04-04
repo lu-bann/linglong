@@ -796,7 +796,6 @@ contract EigenlayerMiddlewareTest is Test {
     function _createRegistration(
         uint256 secretKey,
         address ownerAddress
-
     )
         internal
         view
@@ -813,7 +812,6 @@ contract EigenlayerMiddlewareTest is Test {
     function _createRegistrationSignature(
         uint256 secretKey,
         address ownerAddress
-
     )
         internal
         view

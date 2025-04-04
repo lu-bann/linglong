@@ -389,7 +389,6 @@ contract EigenLayerMiddleware is
 
     // ========= VIEW FUNCTIONS =========
 
-
     // Implementing view functions required by the interface
     function getOperatorDelegationsCount(
         address operator,
