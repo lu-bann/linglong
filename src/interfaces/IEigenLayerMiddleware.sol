@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IRewardsCoordinator } from
@@ -165,4 +166,28 @@ interface IEigenLayerMiddleware {
         );
 
     function getOperatorSetCount() external view returns (uint32);
+
+    /// @notice Gets the rewards initiator address
+    /// @return Address of the rewards initiator
+    function getRewardInitiator() external view returns (address);
+
+    /// @notice Gets the underwriter share in basis points
+    /// @return Underwriter share in basis points
+    function getUnderwriterShareBips() external view returns (uint256);
+
+    /// @notice Gets the registry coordinator
+    /// @return Registry coordinator address
+    function getRegistryCoordinator() external view returns (ITaiyiRegistryCoordinator);
+
+    /// @notice Gets the rewards coordinator
+    /// @return Rewards coordinator address
+    function getRewardsCoordinator() external view returns (IRewardsCoordinator);
+
+    /// @notice Get all registration roots for an operator
+    /// @param operator The operator address
+    /// @return Array of registration roots
+    function getOperatorRegistrationRoots(address operator)
+        external
+        view
+        returns (bytes32[] memory);
 }

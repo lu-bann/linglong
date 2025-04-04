@@ -15,41 +15,33 @@ import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
 
 import { ILinglongSlasher } from "../interfaces/ILinglongSlasher.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
-import { AVSDirectory } from "@eigenlayer-contracts/src/contracts/core/AVSDirectory.sol";
+
 import { DelegationManager } from
     "@eigenlayer-contracts/src/contracts/core/DelegationManager.sol";
-import { StrategyManager } from
-    "@eigenlayer-contracts/src/contracts/core/StrategyManager.sol";
 import { IAVSDirectory } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAVSDirectory.sol";
-import { IDelegationManager } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
-import { IEigenPod } from "@eigenlayer-contracts/src/contracts/interfaces/IEigenPod.sol";
-import { IEigenPodManager } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IEigenPodManager.sol";
 
-import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
-import { IAllocationManagerTypes } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IAllocationManager } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import { IAllocationManagerTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
-import { ISignatureUtils } from
-    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtils.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
-import { IStrategyManager } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IStrategyManager.sol";
-
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
-
 import { BLS } from "@urc/lib/BLS.sol";
+
+import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
+import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
+import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 
 /// @title EigenLayer Middleware contract
 /// @notice This contract is used to manage the registration of operators in EigenLayer core
@@ -61,6 +53,16 @@ contract EigenLayerMiddleware is
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
+
+    /// @notice Reference to the rewards handler contract
+    EigenLayerRewardsHandler public rewardsHandler;
+
+    // ========= EVENTS =========
+    event RewardsHandlerSet(address rewardsHandler);
+
+    // Custom error defined only in this contract (not in the interface)
+    error RewardsHandlerNotSet();
+
     // ========= MODIFIERS =========
 
     /// @notice Modifier that restricts function access to operators registered
@@ -108,6 +110,13 @@ contract EigenLayerMiddleware is
         _setRewardsInitiator(newRewardsInitiator);
     }
 
+    /// @notice Set the rewards handler contract
+    /// @param _rewardsHandler Address of the rewards handler contract
+    function setRewardsHandler(address _rewardsHandler) external onlyOwner {
+        rewardsHandler = EigenLayerRewardsHandler(_rewardsHandler);
+        emit RewardsHandlerSet(_rewardsHandler);
+    }
+
     /// @notice Initialize the contract
     /// @param _owner Address of contract owner
     /// @param _avsDirectory Address of AVS directory contract
@@ -144,14 +153,7 @@ contract EigenLayerMiddleware is
         ALLOCATION_MANAGER = _allocationManager;
     }
 
-    // Todo: add a slashing function in ISlasher to slash the operator when Registry.slashRegistration is successfully
-    //       should also use FRAUD_PROOF_PERIOD() to maintain the slashable period
-    /// @notice Register multiple validators for multiple pod owners in a single
-    /// transaction
-    /// @param registrations Array of arrays containing validator BLS public keys,
-    /// where each inner array corresponds to a
-    /// pod owner
-    /// @dev Length of valPubKeys array must match length of podOwners array
+    /// @notice Register multiple validators for a single transaction
     function registerValidators(
         IRegistry.Registration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
@@ -169,9 +171,6 @@ contract EigenLayerMiddleware is
     }
 
     /// @notice Batch set delegations for a registration root
-    /// @param registrationRoot The registration root
-    /// @param pubkeys Array of validator pubkeys
-    /// @param delegations Array of signed delegations
     function batchSetDelegations(
         bytes32 registrationRoot,
         BLS.G1Point[] calldata pubkeys,
@@ -182,6 +181,7 @@ contract EigenLayerMiddleware is
         _batchSetDelegations(registrationRoot, pubkeys, delegations);
     }
 
+    /// @notice Unregister validators for a registration root
     function unregisterValidators(bytes32 registrationRoot) external {
         // Ensure the registration root is valid for this operator
         if (
@@ -205,12 +205,14 @@ contract EigenLayerMiddleware is
 
         // Delete the pubkey hashes array
         delete operatorDelegations[msg.sender][registrationRoot];
-        operatorRegistrationRoots[msg.sender].remove(registrationRoot);
+        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
+        roots.remove(registrationRoot);
 
         // Unregister from the registry
         REGISTRY.unregister(registrationRoot);
     }
 
+    /// @notice Create an operator set with the given strategies
     function createOperatorSet(IStrategy[] memory strategies)
         external
         onlyOwner
@@ -238,6 +240,7 @@ contract EigenLayerMiddleware is
         return operatorSetId;
     }
 
+    /// @notice Add strategies to an operator set
     function addStrategiesToOperatorSet(
         uint32 operatorSetId,
         IStrategy[] memory strategies
@@ -248,6 +251,7 @@ contract EigenLayerMiddleware is
         _addStrategiesToOperatorSet(operatorSetId, strategies);
     }
 
+    /// @notice Remove strategies from an operator set
     function removeStrategiesFromOperatorSet(
         uint32 operatorSetId,
         IStrategy[] memory strategies
@@ -259,40 +263,83 @@ contract EigenLayerMiddleware is
     }
 
     /// @notice Updates the metadata URI for the AVS
-    /// @param metadataURI The new metadta URI
-    function updateAVSMetadataURI(string calldata metadataURI) public onlyOwner {
+    function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
         _updateAVSMetadataURI(metadataURI);
     }
 
-    /// @notice Creates operator-directed rewards to split between operators and their delegated stakers
-    /// @param operatorDirectedRewardsSubmissions The rewards submissions to process
+    /// @notice Creates operator-directed rewards
     function createOperatorDirectedAVSRewardsSubmission(
         IRewardsCoordinator.OperatorDirectedRewardsSubmission[] calldata
             operatorDirectedRewardsSubmissions
     )
-        public
-        virtual
+        external
+        onlyRewardsInitiator
     {
-        _createOperatorDirectedAVSRewardsSubmission(operatorDirectedRewardsSubmissions);
+        if (address(rewardsHandler) == address(0)) {
+            revert RewardsHandlerNotSet();
+        }
+
+        require(
+            keccak256(bytes(operatorDirectedRewardsSubmissions[0].description))
+                == keccak256(bytes("underwriter")),
+            "EigenLayerMiddleware: First submission must be the Underwriter portion"
+        );
+
+        require(
+            keccak256(bytes(operatorDirectedRewardsSubmissions[1].description))
+                == keccak256(bytes("validator")),
+            "EigenLayerMiddleware: Second submission must be the Validator portion"
+        );
+
+        require(
+            operatorDirectedRewardsSubmissions[0].startTimestamp == block.timestamp
+                && operatorDirectedRewardsSubmissions[1].startTimestamp == block.timestamp,
+            "EigenLayerMiddleware: Underwriter and Validator submissions must have start timestamp of current block"
+        );
+
+        require(
+            operatorDirectedRewardsSubmissions[0].duration == REWARD_DURATION
+                && operatorDirectedRewardsSubmissions[1].duration == REWARD_DURATION,
+            "EigenLayerMiddleware: Underwriter and Validator submissions must have the same duration"
+        );
+
+        // Enforce that the second submission's operator rewards are always zero.
+        // The validator portion is determined by _handleUnderwriterSubmission, which
+        // calculates how many tokens go to the validator side.
+        IRewardsCoordinator.OperatorReward[] memory validatorRewards =
+            operatorDirectedRewardsSubmissions[1].operatorRewards;
+        for (uint256 i = 0; i < validatorRewards.length; i++) {
+            require(
+                validatorRewards[i].amount == 0,
+                "EigenLayerMiddleware: Validator submission reward must be zero"
+            );
+        }
+
+        // 1) Handle Underwriter portion using the rewards handler
+        uint256 validatorAmount = rewardsHandler.handleUnderwriterSubmission(
+            operatorDirectedRewardsSubmissions[0]
+        );
+
+        // 2) Handle Validator portion using the rewards handler
+        rewardsHandler.handleValidatorRewards(
+            operatorDirectedRewardsSubmissions[1], validatorAmount
+        );
     }
 
-    /// @notice Forwards a call to Eigenlayer's RewardsCoordinator contract to set the address of
-    /// the entity that can call `processClaim` on behalf of this contract.
-    /// @param claimer The address of the entity that can call `processClaim` on behalf of the earner
-    /// @dev Only callable by the owner.
-    function setClaimerFor(address claimer) public virtual onlyOwner {
+    /// @notice Set the address of the entity that can call `processClaim`
+    function setClaimerFor(address claimer) external onlyOwner {
         _setClaimerFor(claimer);
     }
 
-    function createAVSRewardsSubmission(
-        IRewardsCoordinator.RewardsSubmission[] calldata submissions
-    )
+    /// @notice Create AVS rewards submission (deprecated)
+    function createAVSRewardsSubmission(IRewardsCoordinator.RewardsSubmission[] calldata)
         external
         pure
     {
         revert UseCreateOperatorDirectedAVSRewardsSubmission();
     }
 
+    /// @notice Process a rewards claim
     function processClaim(
         IRewardsCoordinator.RewardsMerkleClaim calldata claim,
         address recipient
@@ -302,24 +349,277 @@ contract EigenLayerMiddleware is
         _processClaim(claim, recipient);
     }
 
-    /// @dev Internal helper function to register an operator with the AVS
-    /// @param operator The address of the operator
-    /// @param operatorSetParams The parameters for this operator set
-    /// @param sig The signature of the operator
-    /// @return operatorSetId The ID of the operator set
-    function _registerOperatorToAvs(
-        address operator,
-        bytes memory operatorSetParams,
-        bytes memory sig
+    /// @notice Opt in to slasher contract
+    function optInToSlasher(
+        bytes32 registrationRoot,
+        IRegistry.Registration[] calldata registrations,
+        BLS.G2Point[] calldata delegationSignatures,
+        BLS.G1Point calldata delegateePubKey,
+        address delegateeAddress,
+        bytes[] calldata data
     )
-        internal
-        pure
-        returns (uint32 operatorSetId)
+        external
     {
-        revert UseAllocationManagerForOperatorRegistration();
+        REGISTRY.optInToSlasher(registrationRoot, SLASHER, address(this));
+
+        DelegationStore storage delegationStore =
+            operatorDelegations[msg.sender][registrationRoot];
+
+        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
+        roots.add(registrationRoot);
+
+        for (uint256 i = 0; i < registrations.length; ++i) {
+            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
+                delegation: ISlasher.Delegation({
+                    proposer: registrations[i].pubkey,
+                    delegate: delegateePubKey,
+                    committer: delegateeAddress,
+                    slot: type(uint64).max,
+                    metadata: data[i]
+                }),
+                signature: delegationSignatures[i]
+            });
+
+            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
+
+            delegationStore.delegations[pubkeyHash] = signedDelegation;
+            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
+        }
+    }
+
+    // ========= VIEW FUNCTIONS =========
+
+    // Implementing view functions required by the interface
+    function getOperatorDelegationsCount(
+        address operator,
+        bytes32 registrationRoot
+    )
+        external
+        view
+        returns (uint256 count)
+    {
+        return operatorDelegations[operator][registrationRoot].delegationMap.length();
+    }
+
+    /// @notice Get all registration roots for an operator
+    /// @param operator The operator address
+    /// @return Array of registration roots
+    function getOperatorRegistrationRoots(address operator)
+        external
+        view
+        returns (bytes32[] memory)
+    {
+        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
+        uint256 length = roots.length();
+        bytes32[] memory result = new bytes32[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            result[i] = roots.at(i);
+        }
+
+        return result;
+    }
+
+    /// @notice Query the stake amount for an operator across all strategies
+    function getStrategiesAndStakes(address operator)
+        external
+        view
+        returns (IStrategy[] memory strategies, uint256[] memory stakeAmounts)
+    {
+        strategies = getOperatorRestakedStrategies(operator);
+        stakeAmounts = DELEGATION_MANAGER.getOperatorShares(operator, strategies);
+    }
+
+    /// @notice Query the registration status of an operator
+    function verifyRegistration(address operator)
+        public
+        view
+        returns (OperatorSet[] memory)
+    {
+        // First check if operator is registered in delegation manager
+        bool isDelegated = DELEGATION_MANAGER.isOperator(operator);
+        if (!isDelegated) {
+            revert OperatorNotRegisteredInEigenLayer();
+        }
+
+        // Check operator's registration status in this AVS
+        OperatorSet[] memory operatorSets =
+            REGISTRY_COORDINATOR.getOperatorAllocatedOperatorSets(operator);
+        if (operatorSets.length == 0) {
+            revert OperatorNotRegisteredInAVS();
+        }
+
+        return operatorSets;
+    }
+
+    /// @notice Get the strategies an operator has restaked in
+    function getOperatorRestakedStrategies(address operator)
+        public
+        view
+        returns (IStrategy[] memory strategies)
+    {
+        OperatorSet[] memory operatorSets = verifyRegistration(operator);
+        return EigenLayerMiddlewareLib.deduplicateStrategies(
+            operatorSets, REGISTRY_COORDINATOR, operator
+        );
+    }
+
+    /// @notice Get all strategies that can be restaked across all operator sets
+    function getAllRestakeableStrategies() external view returns (address[] memory) {
+        uint32 operatorSetCount = REGISTRY_COORDINATOR.getOperatorSetCount();
+
+        // First count all strategies across all operator sets
+        uint256 totalStrategiesCount = 0;
+        for (uint32 i = 0; i < operatorSetCount; i++) {
+            IStrategy[] memory operatorSet =
+                REGISTRY_COORDINATOR.getOperatorSetStrategies(i);
+            totalStrategiesCount += operatorSet.length;
+        }
+
+        // Create array to store all strategies (with potential duplicates)
+        address[] memory allStrategies = new address[](totalStrategiesCount);
+        uint256 allStrategiesLength = 0;
+
+        // Fill array with all strategies
+        for (uint32 i = 0; i < operatorSetCount; i++) {
+            IStrategy[] memory operatorSet =
+                REGISTRY_COORDINATOR.getOperatorSetStrategies(i);
+            for (uint256 j = 0; j < operatorSet.length; j++) {
+                allStrategies[allStrategiesLength] = address(operatorSet[j]);
+                allStrategiesLength++;
+            }
+        }
+
+        return EigenLayerMiddlewareLib.deduplicateStrategyAddresses(
+            allStrategies, allStrategiesLength
+        );
+    }
+
+    /// @notice Get all strategies for a given operator set
+    function getRestakeableOperatorSetStrategies(uint32 operatorSetId)
+        external
+        view
+        returns (IStrategy[] memory)
+    {
+        require(
+            operatorSetId <= REGISTRY_COORDINATOR.getOperatorSetCount(),
+            "Operator set not found"
+        );
+        return REGISTRY_COORDINATOR.getOperatorSetStrategies(operatorSetId);
+    }
+
+    /// @notice Gets a delegation for an operator by validator pubkey
+    function getDelegation(
+        address operator,
+        bytes32 registrationRoot,
+        BLS.G1Point calldata pubkey
+    )
+        public
+        view
+        returns (ISlasher.SignedDelegation memory)
+    {
+        (address owner,,, uint32 registeredAt,,) =
+            REGISTRY.registrations(registrationRoot);
+
+        if (registeredAt == 0) {
+            revert RegistrationRootNotFound();
+        }
+
+        if (owner != operator) {
+            revert OperatorNotOwnerOfRegistrationRoot();
+        }
+
+        bytes32 pubkeyHash = keccak256(abi.encode(pubkey));
+        DelegationStore storage delegationStore =
+            operatorDelegations[operator][registrationRoot];
+
+        if (delegationStore.delegations[pubkeyHash].delegation.committer != address(0)) {
+            return delegationStore.delegations[pubkeyHash];
+        } else {
+            revert PubKeyNotFound();
+        }
+    }
+
+    /// @notice Gets all delegations for an operator
+    function getAllDelegations(
+        address operator,
+        bytes32 registrationRoot
+    )
+        public
+        view
+        returns (
+            BLS.G1Point[] memory pubkeys,
+            ISlasher.SignedDelegation[] memory delegations
+        )
+    {
+        (address owner,,, uint32 registeredAt,,) =
+            REGISTRY.registrations(registrationRoot);
+
+        if (registeredAt == 0) {
+            revert RegistrationRootNotFound();
+        }
+
+        if (owner != operator) {
+            revert OperatorNotOwnerOfRegistrationRoot();
+        }
+
+        DelegationStore storage delegationStore =
+            operatorDelegations[operator][registrationRoot];
+        uint256 count = delegationStore.delegationMap.length();
+
+        pubkeys = new BLS.G1Point[](count);
+        delegations = new ISlasher.SignedDelegation[](count);
+
+        for (uint256 i = 0; i < count; i++) {
+            bytes32 pubkeyHash = delegationStore.delegationMap.get(i);
+            ISlasher.SignedDelegation memory delegation =
+                delegationStore.delegations[pubkeyHash];
+            pubkeys[i] = delegation.delegation.proposer;
+            delegations[i] = delegation;
+        }
+    }
+
+    function getOperatorSetCount() public view returns (uint32) {
+        return REGISTRY_COORDINATOR.getOperatorSetCount();
+    }
+
+    /// @notice Gets the rewards initiator address
+    /// @return Address of the rewards initiator
+    function getRewardInitiator() external view returns (address) {
+        return REWARD_INITIATOR;
+    }
+
+    /// @notice Gets the underwriter share in basis points
+    /// @return Underwriter share in basis points
+    function getUnderwriterShareBips() external view returns (uint256) {
+        return UNDERWRITER_SHARE_BIPS;
+    }
+
+    /// @notice Gets the registry coordinator
+    /// @return Registry coordinator address
+    function getRegistryCoordinator() external view returns (ITaiyiRegistryCoordinator) {
+        return REGISTRY_COORDINATOR;
+    }
+
+    /// @notice Gets the rewards coordinator
+    /// @return Rewards coordinator address
+    function getRewardsCoordinator() external view returns (IRewardsCoordinator) {
+        return REWARDS_COORDINATOR;
     }
 
     // ========= INTERNAL FUNCTIONS =========
+
+    function _registerOperatorToAvs(
+        address,
+        bytes memory,
+        bytes memory
+    )
+        internal
+        pure
+        returns (uint32)
+    {
+        revert UseAllocationManagerForOperatorRegistration();
+    }
 
     function _batchSetDelegations(
         bytes32 registrationRoot,
@@ -374,7 +674,7 @@ contract EigenLayerMiddleware is
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
-        bytes[] calldata data
+        bytes[] calldata
     )
         internal
         onlyValidatorOperatorSet
@@ -396,42 +696,6 @@ contract EigenLayerMiddleware is
         // always use avs contract address as the owner of the operator
         registrationRoot =
             REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
-    }
-
-    function optInToSlasher(
-        bytes32 registrationRoot,
-        IRegistry.Registration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
-        external
-    {
-        REGISTRY.optInToSlasher(registrationRoot, SLASHER, address(this));
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        operatorRegistrationRoots[msg.sender].add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
-        }
     }
 
     function _createOperatorSet(IStrategy[] memory strategies) internal {
@@ -456,224 +720,16 @@ contract EigenLayerMiddleware is
         REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies);
     }
 
-    /// @dev Helper to create an AVS rewards submission
-    /// @param operatorSetId The ID of the operator set
-    /// @param operators The addresses of operators to distribute rewards to
-    /// @param amounts The amounts to distribute to each operator
-    /// @return submissionData The encoded submission data
     function _createAVSRewardsSubmission(
-        uint32 operatorSetId,
-        address[] memory operators,
-        uint256[] memory amounts
+        uint32,
+        address[] memory,
+        uint256[] memory
     )
         internal
         pure
-        returns (bytes memory submissionData)
+        returns (bytes memory)
     {
         revert UseCreateOperatorDirectedAVSRewardsSubmission();
-    }
-
-    function _createOperatorDirectedAVSRewardsSubmission(
-        IRewardsCoordinator.OperatorDirectedRewardsSubmission[] calldata submissions
-    )
-        internal
-        onlyRewardsInitiator
-    {
-        require(
-            keccak256(bytes(submissions[0].description))
-                == keccak256(bytes("underwriter")),
-            "EigenLayerMiddleware: First submission must be the Underwriter portion"
-        );
-
-        require(
-            keccak256(bytes(submissions[1].description)) == keccak256(bytes("validator")),
-            "EigenLayerMiddleware: Second submission must be the Validator portion"
-        );
-
-        require(
-            submissions[0].startTimestamp == block.timestamp
-                && submissions[1].startTimestamp == block.timestamp,
-            "EigenLayerMiddleware: Underwriter and Validator submissions must have start timestamp of current block"
-        );
-
-        require(
-            submissions[0].duration == REWARD_DURATION
-                && submissions[1].duration == REWARD_DURATION,
-            "EigenLayerMiddleware: Underwriter and Validator submissions must have the same duration"
-        );
-
-        // Enforce that the second submission's operator rewards are always zero.
-        // The validator portion is determined by _handleUnderwriterSubmission, which
-        // calculates how many tokens go to the validator side.
-        IRewardsCoordinator.OperatorReward[] memory validatorRewards =
-            submissions[1].operatorRewards;
-        for (uint256 i = 0; i < validatorRewards.length; i++) {
-            require(
-                validatorRewards[i].amount == 0,
-                "EigenLayerMiddleware: Validator submission reward must be zero"
-            );
-        }
-
-        // 1) Handle Underwriter portion
-        uint256 validatorAmount = _handleUnderwriterSubmission(submissions[0]);
-
-        // 2) Handle Validator portion
-        _handleValidatorRewards(submissions[1], validatorAmount);
-    }
-
-    function _handleUnderwriterSubmission(
-        IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission calldata submission
-    )
-        internal
-        returns (uint256 validatorAmount)
-    {
-        // Calculate total underwriter amount
-        uint256 totalAmount;
-        for (uint256 i = 0; i < submission.operatorRewards.length; i++) {
-            totalAmount += submission.operatorRewards[i].amount;
-        }
-
-        // Transfer tokens from reward initiator to this contract
-        require(
-            submission.token.transferFrom(msg.sender, address(this), totalAmount),
-            "Underwriter token transfer failed"
-        );
-
-        uint256 underwriterAmount =
-            Math.mulDiv(totalAmount, UNDERWRITER_SHARE_BIPS, 10_000);
-        validatorAmount = totalAmount - underwriterAmount;
-
-        // Get all active underwriter operators registered for Underwriter Operator Set(0)
-        address[] memory operators =
-            REGISTRY_COORDINATOR.getOperatorSetOperators(uint32(0));
-        require(operators.length > 0, "UnderwriterAVS: No operators");
-
-        // Calculate per-operator reward amount - multiply first to avoid precision loss
-        uint256 numOperators = operators.length;
-        uint256 baseShare = underwriterAmount / numOperators;
-        uint256 leftover = underwriterAmount % numOperators;
-        require(baseShare > 0, "UnderwriterAVS: Reward per operator is zero");
-
-        // Create array of operator rewards with even distribution
-        IRewardsCoordinator.OperatorReward[] memory opRewards =
-            new IRewardsCoordinator.OperatorReward[](numOperators);
-
-        // Assign each operator a baseShare, plus one extra token until leftover is exhausted
-        for (uint256 i = 0; i < numOperators; i++) {
-            uint256 share = baseShare;
-            if (i < leftover) {
-                // Give one extra token to the first 'leftover' operators
-                share += 1;
-            }
-            opRewards[i] = IRewardsCoordinatorTypes.OperatorReward({
-                operator: operators[i],
-                amount: share
-            });
-        }
-
-        // Todo: Sweep any leftover dust from uneven division to treasury or redistribute
-
-        // Create final submission array with single entry
-        IRewardsCoordinator.OperatorDirectedRewardsSubmission[] memory
-            underwriterSubmissions =
-                new IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission[](1);
-
-        // Configure submission with operator rewards and metadata
-        underwriterSubmissions[0] = IRewardsCoordinatorTypes
-            .OperatorDirectedRewardsSubmission({
-            strategiesAndMultipliers: submission.strategiesAndMultipliers,
-            token: submission.token,
-            operatorRewards: opRewards,
-            startTimestamp: submission.startTimestamp,
-            duration: submission.duration,
-            description: string(
-                abi.encodePacked(submission.description, "(Underwriter portion)")
-            )
-        });
-
-        // Approve RewardsCoordinator to spend the underwriter portion
-        submission.token.approve(address(REWARDS_COORDINATOR), underwriterAmount);
-
-        // Submit rewards distribution to coordinator
-        REWARDS_COORDINATOR.createOperatorDirectedAVSRewardsSubmission(
-            address(this), underwriterSubmissions
-        );
-    }
-
-    function _handleValidatorRewards(
-        IRewardsCoordinator.OperatorDirectedRewardsSubmission calldata submission,
-        uint256 validatorAmount
-    )
-        internal
-    {
-        // Get validator operators and total count for this AVS
-        address[] memory operators =
-            REGISTRY_COORDINATOR.getOperatorSetOperators(uint32(1));
-        require(operators.length > 0, "ValidatorAVS: No operators");
-
-        uint256 totalValidatorCount = 0;
-        for (uint256 i = 0; i < operators.length; i++) {
-            uint256 opRegistrationRootCount =
-                operatorRegistrationRoots[operators[i]].length();
-            for (uint256 j = 0; j < opRegistrationRootCount; j++) {
-                bytes32 registrationRoot = operatorRegistrationRoots[operators[i]].at(j);
-                totalValidatorCount += operatorDelegations[operators[i]][registrationRoot]
-                    .delegationMap
-                    .length();
-            }
-        }
-
-        require(totalValidatorCount > 0, "ValidatorAVS: No validators registered");
-
-        // Build array of OperatorRewards proportionally
-        IRewardsCoordinator.OperatorReward[] memory opRewards =
-            new IRewardsCoordinator.OperatorReward[](operators.length);
-
-        for (uint256 i = 0; i < operators.length; i++) {
-            uint256 opValidatorCount = 0;
-            uint256 opRegistrationRootCount =
-                operatorRegistrationRoots[operators[i]].length();
-            for (uint256 j = 0; j < opRegistrationRootCount; j++) {
-                bytes32 registrationRoot = operatorRegistrationRoots[operators[i]].at(j);
-                opValidatorCount += operatorDelegations[operators[i]][registrationRoot]
-                    .delegationMap
-                    .length();
-            }
-            require(opValidatorCount > 0, "ValidatorAVS: Operator has no validators");
-
-            // Share of the total validatorAmount = amount * (opCount/totalCount)
-            uint256 share = (validatorAmount * opValidatorCount) / totalValidatorCount;
-            require(share > 0, "ValidatorAVS: Operator share is zero");
-
-            opRewards[i] = IRewardsCoordinatorTypes.OperatorReward({
-                operator: operators[i],
-                amount: share
-            });
-        }
-
-        // Combine into a single submission
-        IRewardsCoordinator.OperatorDirectedRewardsSubmission[] memory
-            validatorSubmissions =
-                new IRewardsCoordinator.OperatorDirectedRewardsSubmission[](1);
-
-        validatorSubmissions[0] = IRewardsCoordinatorTypes
-            .OperatorDirectedRewardsSubmission({
-            strategiesAndMultipliers: submission.strategiesAndMultipliers,
-            token: submission.token,
-            operatorRewards: opRewards,
-            startTimestamp: submission.startTimestamp,
-            duration: submission.duration,
-            description: string(
-                abi.encodePacked(submission.description, " (Validator portion)")
-            )
-        });
-
-        // Approve RewardsCoordinator to spend the validator portion
-        submission.token.approve(address(REWARDS_COORDINATOR), validatorAmount);
-
-        REWARDS_COORDINATOR.createOperatorDirectedAVSRewardsSubmission(
-            address(this), validatorSubmissions
-        );
     }
 
     function _setClaimerFor(address claimer) internal {
@@ -686,10 +742,8 @@ contract EigenLayerMiddleware is
 
     function _setRewardsInitiator(address newRewardsInitiator) internal {
         REWARD_INITIATOR = newRewardsInitiator;
-        emit RewardsInitiatorUpdated(REWARD_INITIATOR, newRewardsInitiator);
     }
 
-    /// @dev Internal function that processes a claim.
     function _processClaim(
         IRewardsCoordinator.RewardsMerkleClaim calldata claim,
         address recipient
@@ -699,290 +753,7 @@ contract EigenLayerMiddleware is
         IRewardsCoordinator(REWARDS_COORDINATOR).processClaim(claim, recipient);
     }
 
-    /// @dev Internal function that updates the AVS metadata URI.
     function _updateAVSMetadataURI(string calldata metadataURI) internal {
         AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
-    }
-
-    // ========= VIEW FUNCTIONS =========
-
-    function getOperatorDelegationsCount(
-        address operator,
-        bytes32 registrationRoot
-    )
-        external
-        view
-        returns (uint256 count)
-    {
-        return operatorDelegations[operator][registrationRoot].delegationMap.length();
-    }
-
-    /// @notice Query the stake amount for an operator across all strategies
-    /// @param operator The address of the operator to query
-    /// @return strategies Array of strategy addresses
-    /// @return stakeAmounts Array of corresponding stake amounts
-    function getStrategiesAndStakes(address operator)
-        external
-        view
-        returns (IStrategy[] memory strategies, uint256[] memory stakeAmounts)
-    {
-        strategies = getOperatorRestakedStrategies(operator);
-        stakeAmounts = DELEGATION_MANAGER.getOperatorShares(operator, strategies);
-    }
-
-    /// @notice Query the registration status of an operator
-    /// @param operator The address of the operator to query
-    /// @return isRegistered True if the operator is registered in EigenLayer
-    function verifyRegistration(address operator)
-        public
-        view
-        returns (OperatorSet[] memory)
-    {
-        // First check if operator is registered in delegation manager
-        bool isDelegated = DELEGATION_MANAGER.isOperator(operator);
-        if (!isDelegated) {
-            revert OperatorNotRegisteredInEigenLayer();
-        }
-
-        // Check operator's registration status in this AVS
-        OperatorSet[] memory operatorSets =
-            REGISTRY_COORDINATOR.getOperatorAllocatedOperatorSets(operator);
-        if (operatorSets.length == 0) {
-            revert OperatorNotRegisteredInAVS();
-        }
-
-        return operatorSets;
-    }
-
-    /// @notice Get the strategies an operator has restaked in
-    /// @param operator Address of the operator
-    /// @return strategies Array of strategy addresses the operator has restaked in
-    function getOperatorRestakedStrategies(address operator)
-        public
-        view
-        returns (IStrategy[] memory strategies)
-    {
-        OperatorSet[] memory operatorSets = verifyRegistration(operator);
-
-        // First count all strategies across all operator sets
-        uint256 totalStrategiesCount = 0;
-        for (uint256 i = 0; i < operatorSets.length; i++) {
-            IStrategy[] memory setStrategies = REGISTRY_COORDINATOR
-                .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
-            totalStrategiesCount += setStrategies.length;
-        }
-
-        // Create array to store all strategies (with potential duplicates)
-        address[] memory allStrategies = new address[](totalStrategiesCount);
-        uint256 allStrategiesLength = 0;
-
-        // Fill array with all strategies
-        for (uint256 i = 0; i < operatorSets.length; i++) {
-            IStrategy[] memory setStrategies = REGISTRY_COORDINATOR
-                .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
-            for (uint256 j = 0; j < setStrategies.length; j++) {
-                allStrategies[allStrategiesLength] = address(setStrategies[j]);
-                allStrategiesLength++;
-            }
-        }
-
-        // Count unique strategies
-        uint256 uniqueCount = 0;
-        for (uint256 i = 0; i < allStrategiesLength; i++) {
-            bool isDuplicate = false;
-            for (uint256 j = 0; j < i; j++) {
-                if (allStrategies[j] == allStrategies[i]) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
-                uniqueCount++;
-            }
-        }
-
-        // Create result array with unique strategies
-        strategies = new IStrategy[](uniqueCount);
-        uint256 resultIndex = 0;
-
-        for (uint256 i = 0; i < allStrategiesLength; i++) {
-            bool isDuplicate = false;
-            for (uint256 j = 0; j < resultIndex; j++) {
-                if (allStrategies[i] == address(strategies[j])) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
-                strategies[resultIndex] = IStrategy(allStrategies[i]);
-                resultIndex++;
-            }
-        }
-    }
-
-    /// @notice Get all strategies that can be restaked across all operator sets
-    /// @return Array of all registered strategy addresses
-    function getAllRestakeableStrategies() external view returns (address[] memory) {
-        uint32 operatorSetCount = REGISTRY_COORDINATOR.getOperatorSetCount();
-
-        // First count all strategies across all operator sets
-        uint256 totalStrategiesCount = 0;
-        for (uint32 i = 0; i < operatorSetCount; i++) {
-            IStrategy[] memory operatorSet =
-                REGISTRY_COORDINATOR.getOperatorSetStrategies(i);
-            totalStrategiesCount += operatorSet.length;
-        }
-
-        // Create array to store all strategies (with potential duplicates)
-        address[] memory allStrategies = new address[](totalStrategiesCount);
-        uint256 allStrategiesLength = 0;
-
-        // Fill array with all strategies
-        for (uint32 i = 0; i < operatorSetCount; i++) {
-            IStrategy[] memory operatorSet =
-                REGISTRY_COORDINATOR.getOperatorSetStrategies(i);
-            for (uint256 j = 0; j < operatorSet.length; j++) {
-                allStrategies[allStrategiesLength] = address(operatorSet[j]);
-                allStrategiesLength++;
-            }
-        }
-
-        // Count unique strategies
-        uint256 uniqueCount = 0;
-        for (uint256 i = 0; i < allStrategiesLength; i++) {
-            bool isDuplicate = false;
-            for (uint256 j = 0; j < i; j++) {
-                if (allStrategies[j] == allStrategies[i]) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
-                uniqueCount++;
-            }
-        }
-
-        // Create result array with unique strategies
-        address[] memory result = new address[](uniqueCount);
-        uint256 resultIndex = 0;
-
-        for (uint256 i = 0; i < allStrategiesLength; i++) {
-            bool isDuplicate = false;
-            for (uint256 j = 0; j < resultIndex; j++) {
-                if (allStrategies[i] == result[j]) {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-            if (!isDuplicate) {
-                result[resultIndex] = allStrategies[i];
-                resultIndex++;
-            }
-        }
-
-        // Create correctly sized result array
-        address[] memory strategies = new address[](uniqueCount);
-        for (uint256 i = 0; i < uniqueCount; i++) {
-            strategies[i] = result[i];
-        }
-        return strategies;
-    }
-
-    /// @notice Get all strategies for a given operator set
-    /// @param operatorSetId The ID of the operator set
-    /// @return Array of all strategies in the operator set
-    function getRestakeableOperatorSetStrategies(uint32 operatorSetId)
-        external
-        view
-        returns (IStrategy[] memory)
-    {
-        require(
-            operatorSetId <= REGISTRY_COORDINATOR.getOperatorSetCount(),
-            "Operator set not found"
-        );
-        return REGISTRY_COORDINATOR.getOperatorSetStrategies(operatorSetId);
-    }
-
-    /// @notice Gets a delegation for an operator by validator pubkey
-    /// @param operator The operator address
-    /// @param registrationRoot The registration root
-    /// @param pubkey The validator pubkey
-    /// @return The signed delegation
-    function getDelegation(
-        address operator,
-        bytes32 registrationRoot,
-        BLS.G1Point calldata pubkey
-    )
-        public
-        view
-        returns (ISlasher.SignedDelegation memory)
-    {
-        (address owner,,, uint32 registeredAt,,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        bytes32 pubkeyHash = keccak256(abi.encode(pubkey));
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-
-        if (delegationStore.delegations[pubkeyHash].delegation.committer != address(0)) {
-            return delegationStore.delegations[pubkeyHash];
-        } else {
-            revert PubKeyNotFound();
-        }
-    }
-
-    /// @notice Gets all delegations for an operator
-    /// @param operator The operator address
-    /// @param registrationRoot The registration root (optional, if not specified uses active root)
-    /// @return pubkeys Array of validator pubkeys
-    /// @return delegations Array of signed delegations
-    function getAllDelegations(
-        address operator,
-        bytes32 registrationRoot
-    )
-        public
-        view
-        returns (
-            BLS.G1Point[] memory pubkeys,
-            ISlasher.SignedDelegation[] memory delegations
-        )
-    {
-        (address owner,,, uint32 registeredAt,,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-        uint256 count = delegationStore.delegationMap.length();
-
-        pubkeys = new BLS.G1Point[](count);
-        delegations = new ISlasher.SignedDelegation[](count);
-
-        for (uint256 i = 0; i < count; i++) {
-            bytes32 pubkeyHash = delegationStore.delegationMap.get(i);
-            ISlasher.SignedDelegation memory delegation =
-                delegationStore.delegations[pubkeyHash];
-            pubkeys[i] = delegation.delegation.proposer;
-            delegations[i] = delegation;
-        }
-    }
-
-    function getOperatorSetCount() public view returns (uint32) {
-        return REGISTRY_COORDINATOR.getOperatorSetCount();
     }
 }
