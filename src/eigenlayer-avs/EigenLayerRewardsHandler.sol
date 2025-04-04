@@ -17,13 +17,11 @@ import {
 
 import { BLS } from "@urc/lib/BLS.sol";
 
-/**
- * @title EigenLayerRewardsHandler
- * @author Taiyi team
- * @notice Helper contract for handling rewards distribution logic for EigenLayer AVS
- * @dev This contract manages the distribution of rewards to both underwriters and validators
- *      based on specific allocation strategies
- */
+/// @title EigenLayerRewardsHandler
+/// @author Taiyi team
+/// @notice Helper contract for handling rewards distribution logic for EigenLayer AVS
+/// @dev This contract manages the distribution of rewards to both underwriters and validators
+///      based on specific allocation strategies
 contract EigenLayerRewardsHandler {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -31,13 +29,11 @@ contract EigenLayerRewardsHandler {
 
     // ========= EVENTS =========
 
-    /**
-     * @notice Emitted when underwriter rewards are processed
-     * @param token The reward token address
-     * @param totalAmount The total amount of rewards
-     * @param underwriterAmount The amount allocated to underwriters
-     * @param validatorAmount The amount allocated to validators
-     */
+    /// @notice Emitted when underwriter rewards are processed
+    /// @param token The reward token address
+    /// @param totalAmount The total amount of rewards
+    /// @param underwriterAmount The amount allocated to underwriters
+    /// @param validatorAmount The amount allocated to validators
     event UnderwriterRewardsProcessed(
         address indexed token,
         uint256 totalAmount,
@@ -45,80 +41,61 @@ contract EigenLayerRewardsHandler {
         uint256 validatorAmount
     );
 
-    /**
-     * @notice Emitted when validator rewards are processed
-     * @param token The reward token address
-     * @param validatorAmount The total amount distributed to validators
-     * @param validatorCount The total number of validators receiving rewards
-     */
+    /// @notice Emitted when validator rewards are processed
+    /// @param token The reward token address
+    /// @param validatorAmount The total amount distributed to validators
+    /// @param validatorCount The total number of validators receiving rewards
     event ValidatorRewardsProcessed(
         address indexed token, uint256 validatorAmount, uint256 validatorCount
     );
 
     // ========= ERRORS =========
 
-    /**
-     * @notice Error thrown when the token transfer fails
-     */
+    /// @notice Error thrown when the token transfer fails
     error TokenTransferFailed();
 
-    /**
-     * @notice Error thrown when no underwriter operators are found
-     */
+    /// @notice Error thrown when no underwriter operators are found
     error NoUnderwriterOperators();
 
-    /**
-     * @notice Error thrown when the reward per operator is zero
-     */
+    /// @notice Error thrown when the reward per operator is zero
     error ZeroRewardPerOperator();
 
-    /**
-     * @notice Error thrown when no validators are registered
-     */
+    /// @notice Error thrown when no validators are registered
     error NoValidatorsRegistered();
 
-    /**
-     * @notice Error thrown when an operator has no validators
-     */
+    /// @notice Error thrown when an operator has no validators
     error OperatorHasNoValidators();
 
-    /**
-     * @notice Error thrown when an operator's reward share is zero
-     */
+    /// @notice Error thrown when an operator's reward share is zero
     error ZeroOperatorShare();
+
+    /// @notice Error thrown when no registration roots are found
+    error NoRegistrationRoots();
 
     // ========= STATE VARIABLES =========
 
-    /**
-     * @notice EigenLayer middleware contract reference
-     */
-    IEigenLayerMiddleware public immutable middleware;
+    /// @notice EigenLayer middleware contract reference
+    IEigenLayerMiddleware public middleware;
 
     // ========= CONSTRUCTOR =========
 
-    /**
-     * @notice Constructor sets the middleware contract
-     * @param _middleware Address of the EigenLayerMiddleware contract
-     */
+    /// @notice Constructor sets the middleware contract
+    /// @param _middleware Address of the EigenLayerMiddleware contract
     constructor(address _middleware) {
         middleware = IEigenLayerMiddleware(_middleware);
     }
 
     // ========= EXTERNAL FUNCTIONS =========
 
-    /**
-     * @notice Returns the reward initiator address from the middleware contract
-     * @return Address of the reward initiator
-     */
+    /// @notice Returns the reward initiator address from the middleware contract
+    /// @return Address of the reward initiator
     function getRewardInitiator() external view returns (address) {
         return middleware.getRewardInitiator();
     }
 
-    /**
-     * @notice Handle the underwriter rewards submission
-     * @param submission The rewards submission data
-     * @return validatorAmount The amount allocated for validators
-     */
+    /// @notice Handle the underwriter rewards submission
+    /// @param submission The rewards submission data
+    /// @return validatorAmount The amount allocated for validators
     function handleUnderwriterSubmission(
         IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission calldata submission
     )
@@ -171,11 +148,9 @@ contract EigenLayerRewardsHandler {
         return validatorAmount;
     }
 
-    /**
-     * @notice Handle the validator rewards submission
-     * @param submission The rewards submission data
-     * @param validatorAmount The amount to distribute to validators
-     */
+    /// @notice Handle the validator rewards submission
+    /// @param submission The rewards submission data
+    /// @param validatorAmount The amount to distribute to validators
     function handleValidatorRewards(
         IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission calldata submission,
         uint256 validatorAmount
@@ -184,7 +159,7 @@ contract EigenLayerRewardsHandler {
     {
         // Get validator operators for this AVS
         address[] memory operators =
-            middleware.getRegistryCoordinator().getOperatorSetOperators(uint32(1));
+            middleware.getRegistryCoordinator().getOperatorSetOperators(uint32(0));
 
         if (operators.length == 0) {
             revert NoUnderwriterOperators();
@@ -225,11 +200,9 @@ contract EigenLayerRewardsHandler {
 
     // ========= INTERNAL FUNCTIONS =========
 
-    /**
-     * @notice Calculate the total amount from operator rewards
-     * @param operatorRewards Array of operator rewards
-     * @return totalAmount The sum of all operator rewards
-     */
+    /// @notice Calculate the total amount from operator rewards
+    /// @param operatorRewards Array of operator rewards
+    /// @return totalAmount The sum of all operator rewards
     function _calculateTotalAmount(
         IRewardsCoordinatorTypes.OperatorReward[] calldata operatorRewards
     )
@@ -243,11 +216,9 @@ contract EigenLayerRewardsHandler {
         return totalAmount;
     }
 
-    /**
-     * @notice Calculate the underwriter portion of rewards
-     * @param totalAmount Total reward amount
-     * @return underwriterAmount Amount allocated to underwriters
-     */
+    /// @notice Calculate the underwriter portion of rewards
+    /// @param totalAmount Total reward amount
+    /// @return underwriterAmount Amount allocated to underwriters
     function _calculateUnderwriterAmount(uint256 totalAmount)
         internal
         view
@@ -256,12 +227,10 @@ contract EigenLayerRewardsHandler {
         return Math.mulDiv(totalAmount, middleware.getUnderwriterShareBips(), 10_000);
     }
 
-    /**
-     * @notice Distribute rewards evenly among underwriters
-     * @param underwriterOperators Array of underwriter addresses
-     * @param underwriterAmount Total amount for underwriters
-     * @return opRewards Array of operator rewards
-     */
+    /// @notice Distribute rewards evenly among underwriters
+    /// @param underwriterOperators Array of underwriter addresses
+    /// @param underwriterAmount Total amount for underwriters
+    /// @return opRewards Array of operator rewards
     function _distributeUnderwriterRewards(
         address[] memory underwriterOperators,
         uint256 underwriterAmount
@@ -296,12 +265,10 @@ contract EigenLayerRewardsHandler {
         return opRewards;
     }
 
-    /**
-     * @notice Create underwriter rewards submission
-     * @param submission Original submission parameters
-     * @param opRewards Operator rewards array
-     * @return underwriterSubmissions Array with single submission entry
-     */
+    /// @notice Create underwriter rewards submission
+    /// @param submission Original submission parameters
+    /// @param opRewards Operator rewards array
+    /// @return underwriterSubmissions Array with single submission entry
     function _createUnderwriterSubmission(
         IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission calldata submission,
         IRewardsCoordinatorTypes.OperatorReward[] memory opRewards
@@ -329,12 +296,10 @@ contract EigenLayerRewardsHandler {
         return underwriterSubmissions;
     }
 
-    /**
-     * @notice Count validators per operator and total validators
-     * @param operators Array of operator addresses
-     * @return totalValidatorCount Total number of validators
-     * @return validatorsPerOperator Array of validator counts per operator
-     */
+    /// @notice Count validators per operator and total validators
+    /// @param operators Array of operator addresses
+    /// @return totalValidatorCount Total number of validators
+    /// @return validatorsPerOperator Array of validator counts per operator
     function _countValidators(address[] memory operators)
         internal
         view
@@ -343,26 +308,26 @@ contract EigenLayerRewardsHandler {
         validatorsPerOperator = new uint256[](operators.length);
 
         for (uint256 i = 0; i < operators.length; i++) {
-            bytes32 registrationRoot = getActiveRegistrationRoot(operators[i]);
-            (BLS.G1Point[] memory pubkeys,) =
-                middleware.getAllDelegations(operators[i], registrationRoot);
+            bytes32[] memory registrationRoots = getActiveRegistrationRoot(operators[i]);
+            for (uint256 j = 0; j < registrationRoots.length; j++) {
+                (BLS.G1Point[] memory pubkeys,) =
+                    middleware.getAllDelegations(operators[i], registrationRoots[j]);
 
-            uint256 opValidatorCount = pubkeys.length;
-            validatorsPerOperator[i] = opValidatorCount;
-            totalValidatorCount += opValidatorCount;
+                uint256 opValidatorCount = pubkeys.length;
+                validatorsPerOperator[i] = opValidatorCount;
+                totalValidatorCount += opValidatorCount;
+            }
         }
 
         return (totalValidatorCount, validatorsPerOperator);
     }
 
-    /**
-     * @notice Calculate validator rewards based on validator count per operator
-     * @param operators Array of operator addresses
-     * @param validatorsPerOperator Array of validator counts per operator
-     * @param totalValidatorCount Total number of validators
-     * @param validatorAmount Total amount for validators
-     * @return opRewards Array of operator rewards
-     */
+    /// @notice Calculate validator rewards based on validator count per operator
+    /// @param operators Array of operator addresses
+    /// @param validatorsPerOperator Array of validator counts per operator
+    /// @param totalValidatorCount Total number of validators
+    /// @param validatorAmount Total amount for validators
+    /// @return opRewards Array of operator rewards
     function _calculateValidatorRewards(
         address[] memory operators,
         uint256[] memory validatorsPerOperator,
@@ -398,12 +363,10 @@ contract EigenLayerRewardsHandler {
         return opRewards;
     }
 
-    /**
-     * @notice Create validator rewards submission
-     * @param submission Original submission parameters
-     * @param opRewards Operator rewards array
-     * @return validatorSubmissions Array with single submission entry
-     */
+    /// @notice Create validator rewards submission
+    /// @param submission Original submission parameters
+    /// @param opRewards Operator rewards array
+    /// @return validatorSubmissions Array with single submission entry
     function _createValidatorSubmission(
         IRewardsCoordinatorTypes.OperatorDirectedRewardsSubmission calldata submission,
         IRewardsCoordinatorTypes.OperatorReward[] memory opRewards
@@ -431,21 +394,16 @@ contract EigenLayerRewardsHandler {
         return validatorSubmissions;
     }
 
-    /**
-     * @notice Helper to get an operator's active registration root
-     * @param operator The operator address
-     * @return The active registration root
-     */
-    function getActiveRegistrationRoot(address operator) public view returns (bytes32) {
+    /// @notice Helper to get an operator's active registration root
+    /// @param operator The operator address
+    /// @return The active registration root
+    function getActiveRegistrationRoot(address operator) public view returns (bytes32[] memory) {
         // Get all registration roots for this operator
         bytes32[] memory roots = middleware.getOperatorRegistrationRoots(operator);
         if (roots.length == 0) {
-            return bytes32(0);
+            revert NoRegistrationRoots();
         }
 
-        // For simplicity, return the first registration root
-        // In a production system, you might want to implement more sophisticated logic
-        // to determine which registration root is "active"
-        return roots[0];
+        return roots;
     }
 }
