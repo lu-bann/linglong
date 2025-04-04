@@ -25,6 +25,7 @@ import { IAllocationManager } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
@@ -387,6 +388,7 @@ contract EigenLayerMiddleware is
     }
 
     // ========= VIEW FUNCTIONS =========
+
 
     // Implementing view functions required by the interface
     function getOperatorDelegationsCount(
