@@ -19,11 +19,13 @@ import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableS
 
 import { ILinglongChallenger } from "../interfaces/ILinglongChallenger.sol";
 import { ILinglongSlasher } from "../interfaces/ILinglongSlasher.sol";
+
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { ITaiyiInteractiveChallenger } from
     "../interfaces/ITaiyiInteractiveChallenger.sol";
-import { LinglongSlasherStorage } from "../storage/LinglongSlasherStorage.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
-import { ISymbioticNetworkMiddleware } from "../interfaces/ISymbioticNetworkMiddleware.sol";
+import { LinglongSlasherStorage } from "../storage/LinglongSlasherStorage.sol";
 
 /// @title LinglongSlasher
 /// @notice Implementation of the ILinglongSlasher interface that bridges between URC's slashing system
@@ -227,20 +229,28 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
 
         // Extract middleware address from commitment payload for protocol determination
         address middleware = _extractMiddlewareFromCommitment(commitment);
-        
+
         // Check which protocol the middleware belongs to
-        ITaiyiRegistryCoordinator.RestakingProtocol protocol = 
+        ITaiyiRegistryCoordinator.RestakingProtocol protocol =
             ITaiyiRegistryCoordinator(ALLOCATION_MANAGER).restakingProtocol(middleware);
 
         // Verify proof and get slashing status based on protocol
         bool shouldExecuteSlashing;
         if (protocol == ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC) {
             shouldExecuteSlashing = _verifyProofAndInitiateSymbioticSlashing(
-                operator, middleware, challengerContract, commitment.payload, violationType
+                operator,
+                middleware,
+                challengerContract,
+                commitment.payload,
+                violationType
             );
         } else {
             shouldExecuteSlashing = _verifyProofAndInitiateEigenLayerSlashing(
-                operator, middleware, challengerContract, commitment.payload, violationType
+                operator,
+                middleware,
+                challengerContract,
+                commitment.payload,
+                violationType
             );
         }
 
@@ -268,7 +278,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         (bytes memory payload) = abi.decode(commitment.payload, (bytes));
         ITaiyiInteractiveChallenger.Challenge memory challenge =
             abi.decode(payload, (ITaiyiInteractiveChallenger.Challenge));
-        
+
         // The middleware address is stored in the challenge struct
         return challenge.middleware;
     }
@@ -331,7 +341,8 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         }
 
         // Prepare slashing parameters for EigenLayer
-        IAllocationManagerTypes.SlashingParams memory params = _prepareEigenLayerSlashingParams(
+        IAllocationManagerTypes.SlashingParams memory params =
+        _prepareEigenLayerSlashingParams(
             operator,
             middleware,
             operatorSetId,
@@ -404,7 +415,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         // Prepare slashing parameters for Symbiotic
         bytes32 subnetwork = bytes32(uint256(operatorSetId));
         uint256 slashAmount = ILinglongChallenger(challengerContract).getSlashAmount();
-        
+
         // For Symbiotic, we call the slash function directly on the middleware
         (bool success,) = middleware.call(
             abi.encodeWithSignature(
@@ -413,7 +424,11 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
                     operator,
                     subnetwork,
                     slashAmount,
-                    string(abi.encodePacked("URC slash: ", challengerImpls[challengerContract].name))
+                    string(
+                        abi.encodePacked(
+                            "URC slash: ", challengerImpls[challengerContract].name
+                        )
+                    )
                 )
             )
         );
@@ -461,8 +476,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         returns (IAllocationManagerTypes.SlashingParams memory)
     {
         // Create operator set structure using proper format for getAllocatedStrategies
-        OperatorSet memory opSet =
-            OperatorSet({ avs: middleware, id: operatorSetId });
+        OperatorSet memory opSet = OperatorSet({ avs: middleware, id: operatorSetId });
 
         IStrategy[] memory strategies =
             IAllocationManager(ALLOCATION_MANAGER).getAllocatedStrategies(operator, opSet);
@@ -480,7 +494,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
             description: description
         });
     }
-    
+
     /// @dev Prepare slashing parameters for Symbiotic
     /// @param operator The operator to slash
     /// @param subnetwork The subnetwork ID
@@ -499,11 +513,11 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
     {
         // Create empty slash hints array
         bytes[] memory slashHints = new bytes[](0);
-        
+
         // Return the constructed SlashParams
         return ISymbioticNetworkMiddleware.SlashParams({
             timestamp: uint48(block.timestamp),
-            key: abi.encode(operator),  // Using operator address as the key
+            key: abi.encode(operator), // Using operator address as the key
             amount: slashAmount,
             subnetwork: subnetwork,
             slashHints: slashHints

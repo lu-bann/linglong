@@ -45,7 +45,8 @@ import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
-import { ISymbioticNetworkMiddleware } from "../interfaces/ISymbioticNetworkMiddleware.sol";
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
 
 /// @title SymbioticNetworkMiddleware
 /// @notice A unified middleware contract that manages both gateway and validator networks in the Symbiotic ecosystem
@@ -68,13 +69,13 @@ contract SymbioticNetworkMiddleware is
 
     /// @notice Registry contract reference
     Registry public REGISTRY;
-    
+
     /// @notice Store validation registrations by operator
     mapping(address => mapping(bytes32 => DelegationStore)) public operatorDelegations;
-    
+
     /// @notice Keep track of registration roots for each operator
     mapping(address => EnumerableSet.Bytes32Set) private operatorRegistrationRoots;
-    
+
     /// @notice Similar to EigenLayerMiddleware but for Symbiotic's delegations
     struct DelegationStore {
         mapping(bytes32 => ISlasher.SignedDelegation) delegations;
@@ -206,7 +207,7 @@ contract SymbioticNetworkMiddleware is
             : ITaiyiRegistryCoordinator.RestakingServiceTypes.SYMBIOTIC_UNDERWRITER;
         uint32 serviceTypeId = serviceType.toId();
 
-        registryCoordinator.registerOperatorWithServiceType(
+        registryCoordinator.registerOperatorForSymbiotic(
             msg.sender, serviceTypeId, bytes("")
         );
     }
@@ -228,16 +229,18 @@ contract SymbioticNetworkMiddleware is
         // Verify the operator is registered in the validator subnetwork
         address operator = msg.sender;
         if (
-            registryCoordinator.getOperatorFromOperatorSet(uint32(VALIDATOR_SUBNETWORK), operator)
-                == address(0)
+            registryCoordinator.getOperatorFromOperatorSet(
+                uint32(VALIDATOR_SUBNETWORK), operator
+            ) == address(0)
         ) {
             revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
-        
+
         // Verify the delegatee address is registered in the underwriter subnetwork
         if (
             registryCoordinator.getOperatorFromOperatorSet(
-                uint32(UNDERWRITER_SUBNETWORK), delegateeAddress) == address(0)
+                uint32(UNDERWRITER_SUBNETWORK), delegateeAddress
+            ) == address(0)
         ) {
             revert OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
         }
@@ -249,10 +252,12 @@ contract SymbioticNetworkMiddleware is
 
         // Send 0.11 eth to meet the Registry.MIN_COLLATERAL() requirement
         // always use avs contract address as the owner of the operator
-        registrationRoot = REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
+        registrationRoot =
+            REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
 
         // Store the registration info for this operator
-        DelegationStore storage delegationStore = operatorDelegations[operator][registrationRoot];
+        DelegationStore storage delegationStore =
+            operatorDelegations[operator][registrationRoot];
         EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
         roots.add(registrationRoot);
 
@@ -325,7 +330,7 @@ contract SymbioticNetworkMiddleware is
         address operator = msg.sender;
         (address owner,,, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
             REGISTRY.registrations(registrationRoot);
-        
+
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
         }
@@ -545,7 +550,12 @@ contract SymbioticNetworkMiddleware is
 
     /// @notice Gets the registry coordinator
     /// @return Registry coordinator address
-    function getRegistryCoordinator() external view override returns (ITaiyiRegistryCoordinator) {
+    function getRegistryCoordinator()
+        external
+        view
+        override
+        returns (ITaiyiRegistryCoordinator)
+    {
         return registryCoordinator;
     }
 
@@ -639,7 +649,12 @@ contract SymbioticNetworkMiddleware is
     }
 
     /// @inheritdoc ISymbioticNetworkMiddleware
-    function totalPower(address[] memory operators) external view override returns (uint256) {
+    function totalPower(address[] memory operators)
+        external
+        view
+        override
+        returns (uint256)
+    {
         return _totalPower(operators);
     }
 }

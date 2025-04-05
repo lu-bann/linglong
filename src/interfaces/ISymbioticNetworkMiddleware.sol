@@ -2,17 +2,17 @@
 pragma solidity ^0.8.27;
 
 import { ITaiyiRegistryCoordinator } from "./ITaiyiRegistryCoordinator.sol";
-import { BLS } from "@urc/lib/BLS.sol";
+
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
+import { BLS } from "@urc/lib/BLS.sol";
 
 /**
  * @title ISymbioticNetworkMiddleware
- * @notice Interface for the SymbioticNetworkMiddleware contract that manages both gateway 
+ * @notice Interface for the SymbioticNetworkMiddleware contract that manages both gateway
  * and validator networks in the Symbiotic ecosystem
  */
 interface ISymbioticNetworkMiddleware {
-
     // ========= EVENTS =========
 
     /// @notice Emitted when a validator is registered
@@ -29,7 +29,9 @@ interface ISymbioticNetworkMiddleware {
     /// @param operator The operator address
     /// @param subnetwork The subnetwork ID
     /// @param amount The amount slashed
-    event OperatorSlashed(address indexed operator, uint96 indexed subnetwork, uint256 amount);
+    event OperatorSlashed(
+        address indexed operator, uint96 indexed subnetwork, uint256 amount
+    );
 
     // ========= ERRORS =========
 
@@ -68,7 +70,8 @@ interface ISymbioticNetworkMiddleware {
         address vault,
         bytes memory signature,
         uint96 subnetwork
-    ) external;
+    )
+        external;
 
     /// @notice Register validators for an operator
     /// @param registrations Array of validator registrations
@@ -83,7 +86,10 @@ interface ISymbioticNetworkMiddleware {
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
         bytes[] calldata data
-    ) external payable returns (bytes32 registrationRoot);
+    )
+        external
+        payable
+        returns (bytes32 registrationRoot);
 
     /// @notice Unregister validators for an operator
     /// @param registrationRoot The registration root
@@ -97,7 +103,8 @@ interface ISymbioticNetworkMiddleware {
         bytes32 registrationRoot,
         BLS.G1Point[] calldata pubkeys,
         ISlasher.SignedDelegation[] calldata delegations
-    ) external;
+    )
+        external;
 
     /// @notice Opt in to the slasher contract
     /// @param registrationRoot The registration root
@@ -113,7 +120,8 @@ interface ISymbioticNetworkMiddleware {
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
         bytes[] calldata data
-    ) external;
+    )
+        external;
 
     /// @notice Slash an operator
     /// @param params The slash parameters
@@ -122,7 +130,10 @@ interface ISymbioticNetworkMiddleware {
     /// @notice Get all registration roots for an operator
     /// @param operator The operator address
     /// @return Array of registration roots
-    function getOperatorRegistrationRoots(address operator) external view returns (bytes32[] memory);
+    function getOperatorRegistrationRoots(address operator)
+        external
+        view
+        returns (bytes32[] memory);
 
     /// @notice Get all delegations for an operator
     /// @param operator The operator address
@@ -132,21 +143,27 @@ interface ISymbioticNetworkMiddleware {
     function getAllDelegations(
         address operator,
         bytes32 registrationRoot
-    ) external view returns (
-        BLS.G1Point[] memory pubkeys,
-        ISlasher.SignedDelegation[] memory delegations
-    );
+    )
+        external
+        view
+        returns (
+            BLS.G1Point[] memory pubkeys,
+            ISlasher.SignedDelegation[] memory delegations
+        );
 
     /// @notice Get collateral information for an operator
     /// @param operator The operator address
     /// @return vaults Array of vault addresses
     /// @return collateralTokens Array of collateral token addresses
     /// @return stakedAmounts Array of staked amounts
-    function getOperatorCollaterals(address operator) external view returns (
-        address[] memory vaults,
-        address[] memory collateralTokens,
-        uint256[] memory stakedAmounts
-    );
+    function getOperatorCollaterals(address operator)
+        external
+        view
+        returns (
+            address[] memory vaults,
+            address[] memory collateralTokens,
+            uint256[] memory stakedAmounts
+        );
 
     /// @notice Get the registry coordinator
     /// @return The registry coordinator
@@ -167,4 +184,4 @@ interface ISymbioticNetworkMiddleware {
         bytes32 subnetwork;
         bytes[] slashHints;
     }
-} 
+}

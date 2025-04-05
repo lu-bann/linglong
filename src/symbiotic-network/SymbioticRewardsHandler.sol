@@ -7,7 +7,8 @@ import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
 
-import { ISymbioticNetworkMiddleware } from "../interfaces/ISymbioticNetworkMiddleware.sol";
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
 /**
@@ -29,9 +30,7 @@ contract SymbioticRewardsHandler {
     /// @param totalAmount The total amount of rewards
     /// @param subnetworkId The ID of the subnetwork
     event SubnetworkRewardsProcessed(
-        address indexed token,
-        uint256 totalAmount,
-        uint96 subnetworkId
+        address indexed token, uint256 totalAmount, uint96 subnetworkId
     );
 
     /// @notice Emitted when an operator receives rewards
@@ -84,43 +83,48 @@ contract SymbioticRewardsHandler {
         address token,
         uint256 amount,
         uint96 subnetworkId
-    ) 
-        external 
+    )
+        external
         returns (bool success)
     {
         // Transfer tokens from reward initiator to this contract
         if (!IERC20(token).transferFrom(msg.sender, address(this), amount)) {
             revert TokenTransferFailed();
         }
-        
+
         // Get operators in the subnetwork
-        ITaiyiRegistryCoordinator registryCoordinator = middleware.getRegistryCoordinator();
-        address[] memory operators = registryCoordinator.getOperatorSetOperators(uint32(subnetworkId));
-        
+        ITaiyiRegistryCoordinator registryCoordinator =
+            middleware.getRegistryCoordinator();
+        address[] memory operators =
+            registryCoordinator.getOperatorSetOperators(uint32(subnetworkId));
+
         if (operators.length == 0) {
             revert NoOperatorsRegistered();
         }
-        
+
         // Get all operator stakes and calculate total stake
-        (address[] memory vaults, address[] memory collateralTokens, uint256[] memory stakedAmounts) = 
-            _getOperatorsStakeInformation(operators);
-            
+        (
+            address[] memory vaults,
+            address[] memory collateralTokens,
+            uint256[] memory stakedAmounts
+        ) = _getOperatorsStakeInformation(operators);
+
         uint256 totalStake = 0;
         for (uint256 i = 0; i < stakedAmounts.length; i++) {
             totalStake += stakedAmounts[i];
         }
-        
+
         if (totalStake == 0) {
             revert ZeroRewardPerOperator();
         }
-        
+
         // Distribute rewards proportionally based on stake
         uint256 remainingAmount = amount;
-        
+
         for (uint256 i = 0; i < operators.length; i++) {
             // Calculate proportional share of rewards
             uint256 operatorReward;
-            
+
             if (i == operators.length - 1) {
                 // Last operator gets remaining rewards to handle rounding errors
                 operatorReward = remainingAmount;
@@ -128,23 +132,25 @@ contract SymbioticRewardsHandler {
                 operatorReward = Math.mulDiv(amount, stakedAmounts[i], totalStake);
                 remainingAmount -= operatorReward;
             }
-            
+
             if (operatorReward > 0) {
                 // Transfer rewards to the operator
                 if (!IERC20(token).transfer(operators[i], operatorReward)) {
                     revert TokenTransferFailed();
                 }
-                
-                emit OperatorRewardDistributed(token, operators[i], operatorReward, subnetworkId);
+
+                emit OperatorRewardDistributed(
+                    token, operators[i], operatorReward, subnetworkId
+                );
             }
         }
-        
+
         emit SubnetworkRewardsProcessed(token, amount, subnetworkId);
         return true;
     }
-    
+
     // ========= INTERNAL FUNCTIONS =========
-    
+
     /// @notice Get stake information for all operators
     /// @param operators Array of operator addresses
     /// @return vaults Array of vault addresses
@@ -163,28 +169,28 @@ contract SymbioticRewardsHandler {
         vaults = new address[](totalOperators);
         collateralTokens = new address[](totalOperators);
         stakedAmounts = new uint256[](totalOperators);
-        
+
         for (uint256 i = 0; i < totalOperators; i++) {
             (
                 address[] memory operatorVaults,
                 address[] memory operatorCollateralTokens,
                 uint256[] memory operatorStakedAmounts
             ) = middleware.getOperatorCollaterals(operators[i]);
-            
+
             // Sum up all collateral for this operator
             uint256 totalStake = 0;
             for (uint256 j = 0; j < operatorStakedAmounts.length; j++) {
                 totalStake += operatorStakedAmounts[j];
             }
-            
+
             if (operatorVaults.length > 0) {
                 vaults[i] = operatorVaults[0];
                 collateralTokens[i] = operatorCollateralTokens[0];
             }
-            
+
             stakedAmounts[i] = totalStake;
         }
-        
+
         return (vaults, collateralTokens, stakedAmounts);
     }
-} 
+}
