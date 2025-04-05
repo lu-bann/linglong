@@ -36,7 +36,6 @@ import { Pausable } from "@eigenlayer-contracts/src/contracts/permissions/Pausab
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
-import { ServiceTypeLib } from "../libs/ServiceTypeLib.sol";
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 
 /// @title A `TaiyiRegistryCoordinator` that has two registries:
@@ -55,7 +54,7 @@ contract TaiyiRegistryCoordinator is
     using OperatorSubsetLib for uint32;
 
     // ======== NEW PROTOCOL TYPE HANDLING =======
-    
+
     /// @notice Map middleware addresses to their protocol type
     mapping(address => RestakingProtocol) public restakingProtocol;
 
@@ -64,7 +63,7 @@ contract TaiyiRegistryCoordinator is
 
     /// @notice Emitted when a new middleware is added or updated
     event RestakingMiddlewareUpdated(address previousMiddleware, address newMiddleware);
-    
+
     // ======== END NEW PROTOCOL TYPE HANDLING =======
 
     modifier onlyAllocationManager() {
@@ -73,12 +72,18 @@ contract TaiyiRegistryCoordinator is
     }
 
     modifier onlySymbioticMiddleware() {
-        require(restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC, OnlySymbioticMiddleware());
+        require(
+            restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC,
+            OnlySymbioticMiddleware()
+        );
         _;
     }
 
     modifier onlyEigenlayerMiddleware() {
-        require(restakingProtocol[msg.sender] == RestakingProtocol.EIGENLAYER, OnlyEigenlayerMiddleware());
+        require(
+            restakingProtocol[msg.sender] == RestakingProtocol.EIGENLAYER,
+            OnlyEigenlayerMiddleware()
+        );
         _;
     }
 
@@ -127,10 +132,9 @@ contract TaiyiRegistryCoordinator is
     )
         external
         override(IAVSRegistrar, ITaiyiRegistryCoordinator)
-        onlyAllocationManager
         onlyWhenNotPaused(PAUSED_REGISTER_OPERATOR)
     {
-        if(restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
+        if (restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
             _registerOperatorForSymbiotic(operator, operatorSetIds, data);
         } else {
             _registerOperatorForEigenlayer(operator, operatorSetIds, data);
@@ -152,7 +156,6 @@ contract TaiyiRegistryCoordinator is
             _deregisterOperatorForEigenlayer(operator, operatorSetIds);
         }
     }
-
 
     /// @inheritdoc ITaiyiRegistryCoordinator
     function updateSocket(string memory socket) external {
@@ -224,11 +227,11 @@ contract TaiyiRegistryCoordinator is
     function getRestakingMiddleware() external view returns (address[] memory) {
         uint256 length = restakingMiddleware.length();
         address[] memory middlewares = new address[](length);
-        
+
         for (uint256 i = 0; i < length; i++) {
             middlewares[i] = restakingMiddleware.at(i);
         }
-        
+
         return middlewares;
     }
 
@@ -251,8 +254,7 @@ contract TaiyiRegistryCoordinator is
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(
-            operatorInfo.status != OperatorStatus.REGISTERED, 
-            OperatorAlreadyRegistered()
+            operatorInfo.status != OperatorStatus.REGISTERED, OperatorAlreadyRegistered()
         );
 
         (string memory socket, IPubkeyRegistry.PubkeyRegistrationParams memory params) =
@@ -268,7 +270,8 @@ contract TaiyiRegistryCoordinator is
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         for (uint32 i = 0; i < operatorSetIds.length; i++) {
-            uint32 encodedId = operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+            uint32 encodedId =
+                operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
             _operatorSets[encodedId].add(operator);
         }
     }
@@ -286,7 +289,8 @@ contract TaiyiRegistryCoordinator is
         _deregisterOperatorFromOperatorSets(operator, operatorSetIds);
         operatorInfo.status = OperatorStatus.DEREGISTERED;
         for (uint32 i = 0; i < operatorSetIds.length; i++) {
-            uint32 encodedId = operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+            uint32 encodedId =
+                operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
             _operatorSets[encodedId].remove(operator);
         }
     }
@@ -299,11 +303,11 @@ contract TaiyiRegistryCoordinator is
         returns (uint32 operatorSetId)
     {
         // Get the current operator set count from allocationManager
-        uint256 currentSetCount =
-            allocationManager.getOperatorSetCount(msg.sender);
+        uint256 currentSetCount = allocationManager.getOperatorSetCount(msg.sender);
 
         // Use the current count as the next ID
-        operatorSetId = uint32(currentSetCount).encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+        operatorSetId =
+            uint32(currentSetCount).encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
 
         IAllocationManagerTypes.CreateSetParams[] memory createSetParams =
             new IAllocationManagerTypes.CreateSetParams[](1);
@@ -313,18 +317,26 @@ contract TaiyiRegistryCoordinator is
             strategies: strategies
         });
 
-        console.log("createOperatorSets", msg.sender);
         allocationManager.createOperatorSets(msg.sender, createSetParams);
-
         return operatorSetId;
     }
 
-    function getOperatorSetOperators(uint32 operatorSetId)
+    function getOperatorSetOperators(
+        uint32 operatorSetId,
+        RestakingProtocol protocol
+    )
         external
         view
         returns (address[] memory)
     {
-        return _operatorSets[operatorSetId].values();
+        if (protocol == RestakingProtocol.EIGENLAYER) {
+            operatorSetId =
+                operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+            return _operatorSets[operatorSetId].values();
+        } else {
+            operatorSetId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+            return _operatorSets[operatorSetId].values();
+        }
     }
 
     /**
@@ -348,10 +360,7 @@ contract TaiyiRegistryCoordinator is
         return address(0);
     }
 
-    /**
-     * @notice Gets the number of operator sets
-     * @return The number of operator sets
-     */
+    // Todo: add symbiotic support
     function getOperatorSetCount() external view returns (uint32) {
         // Convert uint256 to uint32 for the return value
         return uint32(allocationManager.getOperatorSetCount(msg.sender));
@@ -362,22 +371,24 @@ contract TaiyiRegistryCoordinator is
      * @param operatorSetId The operator set ID
      * @return The operator set
      */
-    function getOperatorSet(uint32 operatorSetId)
+    function getOperatorSet(
+        uint32 operatorSetId,
+        RestakingProtocol protocol
+    )
         external
         view
         returns (address[] memory)
     {
-        // Get the current operator set count to validate the requested ID
-        uint256 currentSetCount =
-            allocationManager.getOperatorSetCount(msg.sender);
-
-        if (operatorSetId >= currentSetCount) {
-            revert OperatorSetNotFound(operatorSetId);
+        if (protocol == RestakingProtocol.EIGENLAYER) {
+            operatorSetId =
+                operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+        } else {
+            operatorSetId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
         }
-        // Use our stored operator set instead of calling allocationManager
         return _operatorSets[operatorSetId].values();
     }
 
+    // Todo: add symbiotic support
     function getOperatorSetStrategies(uint32 operatorSetId)
         external
         view
@@ -388,6 +399,7 @@ contract TaiyiRegistryCoordinator is
         return allocationManager.getStrategiesInOperatorSet(operatorSet);
     }
 
+    // Todo: add symbiotic support
     function addStrategiesToOperatorSet(
         uint32 operatorSetId,
         IStrategy[] memory strategies
@@ -395,8 +407,7 @@ contract TaiyiRegistryCoordinator is
         external
         onlyRestakingMiddleware
     {
-        uint256 operatorSetCount =
-            allocationManager.getOperatorSetCount(msg.sender);
+        uint256 operatorSetCount = allocationManager.getOperatorSetCount(msg.sender);
         require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
         allocationManager.addStrategiesToOperatorSet({
             avs: msg.sender,
@@ -405,6 +416,7 @@ contract TaiyiRegistryCoordinator is
         });
     }
 
+    // Todo: add symbiotic support
     function removeStrategiesFromOperatorSet(
         uint32 operatorSetId,
         IStrategy[] memory strategies
@@ -412,8 +424,7 @@ contract TaiyiRegistryCoordinator is
         external
         onlyRestakingMiddleware
     {
-        uint256 operatorSetCount =
-            allocationManager.getOperatorSetCount(msg.sender);
+        uint256 operatorSetCount = allocationManager.getOperatorSetCount(msg.sender);
         require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
         allocationManager.removeStrategiesFromOperatorSet({
             avs: msg.sender,
@@ -493,6 +504,7 @@ contract TaiyiRegistryCoordinator is
     /// ============== EIGENLAYER IN-PROTOCOL OPERATOR VIEW FUNCTIONS ==========================
     /// ========================================================================================
 
+    // Todo: add symbiotic support
     /// @notice Returns all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch
     /// @return Array of operator sets that the operator has allocated magnitude to
@@ -504,6 +516,7 @@ contract TaiyiRegistryCoordinator is
         return allocationManager.getAllocatedSets(operator);
     }
 
+    // Todo: add symbiotic support
     /// @notice Returns all strategies that an operator has allocated magnitude to in a specific operator set
     /// @param operator The operator whose allocated strategies to fetch
     /// @param operatorSetId The ID of the operator set to query
@@ -521,6 +534,7 @@ contract TaiyiRegistryCoordinator is
         return allocationManager.getAllocatedStrategies(operator, operatorSet);
     }
 
+    // Todo: add symbiotic support
     /// @notice Returns an operator's allocation info for a specific strategy in an operator set
     /// @param operator The operator whose allocation to fetch
     /// @param operatorSetId The ID of the operator set to query
@@ -540,6 +554,7 @@ contract TaiyiRegistryCoordinator is
         return allocationManager.getAllocation(operator, operatorSet, strategy);
     }
 
+    // Todo: add symbiotic support
     /// @notice Returns all operator sets and allocations for a specific strategy that an operator has allocated magnitude to
     /// @param operator The operator whose allocations to fetch
     /// @param strategy The strategy to query
@@ -555,6 +570,7 @@ contract TaiyiRegistryCoordinator is
         return allocationManager.getStrategyAllocations(operator, strategy);
     }
 
+    // Todo: add symbiotic support
     /// @notice Returns all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch
     /// @return Array of operator sets that the operator has allocated magnitude to
@@ -656,11 +672,12 @@ contract TaiyiRegistryCoordinator is
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         for (uint32 i = 0; i < subnetworkIds.length; i++) {
-            uint32 encodedId = subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+            uint32 encodedId =
+                subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
             _operatorSets[encodedId].add(operator);
         }
     }
-    
+
     /// @notice Deregister an operator from the Symbiotic protocol
     /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs for deregistration
     /// @param operator The operator to deregister
@@ -677,7 +694,8 @@ contract TaiyiRegistryCoordinator is
 
         operatorInfo.status = OperatorStatus.DEREGISTERED;
         for (uint32 i = 0; i < subnetworkIds.length; i++) {
-            uint32 encodedId = subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+            uint32 encodedId =
+                subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
             _operatorSets[encodedId].remove(operator);
         }
     }
