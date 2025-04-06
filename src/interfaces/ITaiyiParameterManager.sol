@@ -11,6 +11,9 @@ interface ITaiyiParameterManager {
     /// @notice Get the challenge creation window how many blocks can pass before a challenge can be created.
     function challengeCreationWindow() external view returns (uint256);
 
+    /// @notice Get the finalization window how many slots before the block is finalized (justified by LMD GHOST).
+    function finalizationWindow() external view returns (uint256);
+
     /// @notice Get the genesis timestamp of the chain.
     function genesisTimestamp() external view returns (uint256);
 
@@ -31,6 +34,10 @@ interface ITaiyiParameterManager {
     /// @notice Set the challenge creation window.
     /// @param _challengeCreationWindow The challenge creation window.
     function setChallengeCreationWindow(uint256 _challengeCreationWindow) external;
+
+    /// @notice Set the finalization window.
+    /// @param _finalizationWindow The finalization window.
+    function setFinalizationWindow(uint256 _finalizationWindow) external;
 
     /// @notice Set the genesis timestamp.
     /// @param _genesisTimestamp The genesis timestamp.

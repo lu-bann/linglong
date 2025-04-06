@@ -23,6 +23,7 @@ interface ITaiyiInteractiveChallenger {
     }
 
     error TargetSlotNotInChallengeCreationWindow();
+    error BlockNotFinalized();
     error SignerDoesNotMatchPreconfRequest();
     error ChallengeBondInvalid();
     error ChallengeAlreadyResolved();
@@ -36,6 +37,7 @@ interface ITaiyiInteractiveChallenger {
     error TaiyiCoreAddressDoesNotMatch();
     error ChallengeIdDoesNotMatch();
     error CommitmentSignerDoesNotMatch();
+    error BlockHashDoesNotMatch();
 
     event ChallengeOpened(
         bytes32 indexed id, address indexed challenger, address indexed commitmentSigner

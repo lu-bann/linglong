@@ -41,6 +41,7 @@ contract TaiyiParameterManagerTest is Test {
                 1,
                 64,
                 256,
+                32,
                 SEPOLIA_GENESIS_TIMESTAMP,
                 12,
                 TAIYI_CORE_ADDRESS
@@ -98,6 +99,24 @@ contract TaiyiParameterManagerTest is Test {
         vm.prank(user);
         vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
         taiyiParameterManager.setChallengeMaxDuration(32);
+    }
+
+    // =========================================
+    //  Test: Owner can set finalization window
+    // =========================================
+    function testOwnerCanSetFinalizationWindow() public {
+        vm.prank(owner);
+        taiyiParameterManager.setFinalizationWindow(0);
+        assertEq(taiyiParameterManager.finalizationWindow(), 0);
+    }
+
+    // =========================================
+    //  Test: User is not authorized to set finalization window
+    // =========================================
+    function testUserCannotSetFinalizationWindow() public {
+        vm.prank(user);
+        vm.expectPartialRevert(Ownable.OwnableUnauthorizedAccount.selector);
+        taiyiParameterManager.setFinalizationWindow(0);
     }
 
     // =========================================

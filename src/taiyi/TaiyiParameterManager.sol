@@ -22,6 +22,9 @@ contract TaiyiParameterManager is
     /// @dev The challenge creation window.
     uint256 public challengeCreationWindow;
 
+    /// @notice The number of slots before the block is finalized (justified by LMD GHOST).
+    uint256 public finalizationWindow;
+
     /// @dev The genesis timestamp of the chain.
     uint256 public genesisTimestamp;
 
@@ -40,6 +43,7 @@ contract TaiyiParameterManager is
         uint256 _challengeBond,
         uint256 _challengeMaxDuration,
         uint256 _challengeCreationWindow,
+        uint256 _finalizationWindow,
         uint256 _genesisTimestamp,
         uint256 _slotTime,
         address _taiyiCore
@@ -52,6 +56,7 @@ contract TaiyiParameterManager is
         challengeBond = _challengeBond;
         challengeMaxDuration = _challengeMaxDuration;
         challengeCreationWindow = _challengeCreationWindow;
+        finalizationWindow = _finalizationWindow;
         genesisTimestamp = _genesisTimestamp;
         slotTime = _slotTime;
         taiyiCore = _taiyiCore;
@@ -75,6 +80,11 @@ contract TaiyiParameterManager is
         onlyOwner
     {
         challengeCreationWindow = _challengeCreationWindow;
+    }
+
+    /// @inheritdoc ITaiyiParameterManager
+    function setFinalizationWindow(uint256 _finalizationWindow) external onlyOwner {
+        finalizationWindow = _finalizationWindow;
     }
 
     /// @inheritdoc ITaiyiParameterManager

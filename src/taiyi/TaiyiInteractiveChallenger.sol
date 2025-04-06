@@ -123,6 +123,23 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             revert ChallengeBondInvalid();
         }
 
+        uint256 currentSlot = _getSlotFromTimestamp(block.timestamp);
+
+        // Check if block is finalized
+        if (
+            currentSlot < preconfRequestAType.slot + parameterManager.finalizationWindow()
+        ) {
+            revert BlockNotFinalized();
+        }
+
+        // Check if target slot is in challenge creation window
+        if (
+            currentSlot
+                > preconfRequestAType.slot + parameterManager.challengeCreationWindow()
+        ) {
+            revert TargetSlotNotInChallengeCreationWindow();
+        }
+
         // We abi encode the preconfRequestAType to store it in the challenge struct
         bytes memory encodedPreconfRequestAType = abi.encode(preconfRequestAType);
 
@@ -171,18 +188,27 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             revert ChallengeBondInvalid();
         }
 
+        uint256 currentSlot = _getSlotFromTimestamp(block.timestamp);
+
+        // Check if block is finalized
         if (
-            preconfRequestBType.blockspaceAllocation.targetSlot
-                < _getSlotFromTimestamp(block.timestamp)
-                    - parameterManager.challengeCreationWindow()
-                || preconfRequestBType.blockspaceAllocation.targetSlot
-                    > _getSlotFromTimestamp(block.timestamp)
+            currentSlot
+                < preconfRequestBType.blockspaceAllocation.targetSlot
+                    + parameterManager.finalizationWindow()
+        ) {
+            revert BlockNotFinalized();
+        }
+
+        // Check if target slot is in challenge creation window
+        if (
+            currentSlot
+                > preconfRequestBType.blockspaceAllocation.targetSlot
+                    + parameterManager.challengeCreationWindow()
         ) {
             revert TargetSlotNotInChallengeCreationWindow();
         }
 
-        // TODO: Do we want to wait for the target slot to be finalized (reorgs) ?
-
+        // We abi encode the preconfRequestBType to store it in the challenge struct
         bytes memory encodedPreconfRequestBType = abi.encode(preconfRequestBType);
 
         bytes32 dataHash =
@@ -190,9 +216,6 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
 
         // Recover the signer of the preconf request (revert if the signature is invalid)
         address signer = ECDSA.recover(dataHash, signature);
-
-        // TODO: Is the Bond enough to prevent someone to spam create challenges
-        // or should we verify the signer is a valid/staked validator (for slashing)
 
         // Compute challenge ID from the preconf request signature
         bytes32 challengeId = keccak256(signature);
@@ -280,11 +303,14 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         (
             uint64 proofBlockTimestamp,
             bytes32 proofBlockHash,
+            uint64 proofBlockNumber,
             address _underwriterAddress,
             bytes memory signature,
             uint64 genesisTimestamp,
             address taiyiCore
-        ) = abi.decode(proofValues, (uint64, bytes32, address, bytes, uint64, address));
+        ) = abi.decode(
+            proofValues, (uint64, bytes32, uint64, address, bytes, uint64, address)
+        );
 
         if (challenge.preconfType == 0) {
             // Decode preconf request from challenge data
@@ -309,7 +335,10 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             }
         }
 
-        // TODO: Verify the block hash
+        // Verify the block hash
+        if (proofBlockHash != blockhash(proofBlockNumber)) {
+            revert BlockHashDoesNotMatch();
+        }
 
         // Verify the proof challenge ID matches the challenge ID
         if (keccak256(signature) != keccak256(challenge.signature)) {
