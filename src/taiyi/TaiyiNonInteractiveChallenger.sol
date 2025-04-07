@@ -9,7 +9,6 @@ import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { ISP1Verifier } from "@sp1-contracts/ISP1Verifier.sol";
 
 contract TaiyiNonInteractiveChallenger is ITaiyiNonInteractiveChallenger, Ownable {
-    /// @notice The address of the SP1 verifier contract.
     /// @dev This can either be a specific SP1Verifier for a specific version, or the
     ///      SP1VerifierGateway which can be used to verify proofs for any version of SP1.
     ///      For the list of supported verifiers on each chain, see:

@@ -181,13 +181,13 @@ contract TaiyiCore is
         ECDSAHelper.verifySignature(
             preconfRequestBType.blockspaceAllocationSignature,
             blockspaceAllocation.recipient,
-            preconfRequestBType.gatewaySignedBlockspaceAllocation,
-            "invalid gateway signature"
+            preconfRequestBType.underwriterSignedBlockspaceAllocation,
+            "invalid underwriter signature"
         );
         ECDSAHelper.verifySignature(
             preconfRequestBType.rawTx,
             blockspaceAllocation.recipient,
-            preconfRequestBType.gatewaySignedRawTx,
+            preconfRequestBType.underwriterSignedRawTx,
             "invalid raw tx signature"
         );
     }

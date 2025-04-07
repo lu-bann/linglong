@@ -11,11 +11,17 @@ interface ITaiyiParameterManager {
     /// @notice Get the challenge creation window how many blocks can pass before a challenge can be created.
     function challengeCreationWindow() external view returns (uint256);
 
+    /// @notice Get the finalization window how many slots before the block is finalized (justified by LMD GHOST).
+    function finalizationWindow() external view returns (uint256);
+
     /// @notice Get the genesis timestamp of the chain.
     function genesisTimestamp() external view returns (uint256);
 
     /// @notice Get the slot time of the chain.
     function slotTime() external view returns (uint256);
+
+    /// @notice Get the address of the TaiyiCore contract.
+    function taiyiCore() external view returns (address);
 
     /// @notice Set the challenge bond.
     /// @param _challengeBond The bond required to open a challenge.
@@ -29,6 +35,10 @@ interface ITaiyiParameterManager {
     /// @param _challengeCreationWindow The challenge creation window.
     function setChallengeCreationWindow(uint256 _challengeCreationWindow) external;
 
+    /// @notice Set the finalization window.
+    /// @param _finalizationWindow The finalization window.
+    function setFinalizationWindow(uint256 _finalizationWindow) external;
+
     /// @notice Set the genesis timestamp.
     /// @param _genesisTimestamp The genesis timestamp.
     function setGenesisTimestamp(uint256 _genesisTimestamp) external;
@@ -36,4 +46,8 @@ interface ITaiyiParameterManager {
     /// @notice Set the slot time.
     /// @param _slotTime The slot time.
     function setSlotTime(uint256 _slotTime) external;
+
+    /// @notice Set the address of the TaiyiCore contract.
+    /// @param _taiyiCore The address of the TaiyiCore contract.
+    function setTaiyiCore(address _taiyiCore) external;
 }
