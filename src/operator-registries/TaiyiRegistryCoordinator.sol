@@ -21,6 +21,7 @@ import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
 import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 
 import { BN254 } from "../libs/BN254.sol";
+import { RestakingProtocolMap } from "../libs/RestakingProtocolMap.sol";
 
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -52,44 +53,25 @@ contract TaiyiRegistryCoordinator is
     using BN254 for BN254.G1Point;
     using EnumerableSet for EnumerableSet.AddressSet;
     using OperatorSubsetLib for uint32;
-
-    // ======== NEW PROTOCOL TYPE HANDLING =======
+    using OperatorSubsetLib for OperatorSubsetLib.OperatorSets;
+    using RestakingProtocolMap for RestakingProtocolMap.Map;
 
     /// @notice Map middleware addresses to their protocol type
-    mapping(address => RestakingProtocol) public restakingProtocol;
-
-    /// @notice Set to track all registered middleware addresses
-    EnumerableSet.AddressSet internal restakingMiddleware;
+    RestakingProtocolMap.Map internal restakingProtocolMap;
 
     /// @notice Emitted when a new middleware is added or updated
-    event RestakingMiddlewareUpdated(address previousMiddleware, address newMiddleware);
+    event RestakingMiddlewareUpdated(RestakingProtocol restakingProtocol, address newMiddleware);
 
     // ======== END NEW PROTOCOL TYPE HANDLING =======
 
-    modifier onlyAllocationManager() {
-        _checkAllocationManager();
-        _;
-    }
 
-    modifier onlySymbioticMiddleware() {
-        require(
-            restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC,
-            OnlySymbioticMiddleware()
-        );
-        _;
-    }
-
-    modifier onlyEigenlayerMiddleware() {
-        require(
-            restakingProtocol[msg.sender] == RestakingProtocol.EIGENLAYER,
-            OnlyEigenlayerMiddleware()
-        );
-        _;
-    }
 
     /// @notice Modifier that allows only registered middleware contracts to call a function
     modifier onlyRestakingMiddleware() {
-        require(restakingMiddleware.contains(msg.sender), OnlyRestakingMiddleware());
+        require(
+            restakingProtocolMap.get(msg.sender) != RestakingProtocol.None,
+            OnlyRestakingMiddleware()
+        );
         _;
     }
 
@@ -134,7 +116,7 @@ contract TaiyiRegistryCoordinator is
         override(IAVSRegistrar, ITaiyiRegistryCoordinator)
         onlyWhenNotPaused(PAUSED_REGISTER_OPERATOR)
     {
-        if (restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
+        if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
             _registerOperatorForSymbiotic(operator, operatorSetIds, data);
         } else {
             _registerOperatorForEigenlayer(operator, operatorSetIds, data);
@@ -150,7 +132,7 @@ contract TaiyiRegistryCoordinator is
         override(IAVSRegistrar, ITaiyiRegistryCoordinator)
         onlyWhenNotPaused(PAUSED_DEREGISTER_OPERATOR)
     {
-        if (restakingProtocol[msg.sender] == RestakingProtocol.SYMBIOTIC) {
+        if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
             _deregisterOperatorForSymbiotic(operator, operatorSetIds);
         } else {
             _deregisterOperatorForEigenlayer(operator, operatorSetIds);
@@ -163,12 +145,6 @@ contract TaiyiRegistryCoordinator is
             _operatorInfo[msg.sender].status == OperatorStatus.REGISTERED, NotRegistered()
         );
         _setOperatorSocket(_operatorInfo[msg.sender].operatorId, socket);
-    }
-
-    /// @inheritdoc ITaiyiRegistryCoordinator
-    function setEigenlayerMiddleware(address _eigenlayerMiddleware) external onlyOwner {
-        eigenlayerMiddleware = _eigenlayerMiddleware;
-        _setRestakingProtocol(_eigenlayerMiddleware, RestakingProtocol.EIGENLAYER);
     }
 
     /**
@@ -191,24 +167,6 @@ contract TaiyiRegistryCoordinator is
         pubkeyRegistry = IPubkeyRegistry(_pubkeyRegistry);
     }
 
-    /// @inheritdoc ITaiyiRegistryCoordinator
-    function setRestakingMiddleware(address _restakingMiddleware) external onlyOwner {
-        require(
-            _restakingMiddleware != address(0),
-            "RestakingMiddleware cannot be zero address"
-        );
-        address previousMiddleware = address(0);
-        if (restakingMiddleware.length() > 0) {
-            previousMiddleware = restakingMiddleware.at(0);
-        }
-
-        if (!restakingMiddleware.contains(_restakingMiddleware)) {
-            restakingMiddleware.add(_restakingMiddleware);
-        }
-
-        emit RestakingMiddlewareUpdated(previousMiddleware, _restakingMiddleware);
-    }
-
     /// @notice Sets the protocol type for a middleware address
     /// @param _restakingMiddleware The middleware address
     /// @param _restakingProtocol The protocol type (EIGENLAYER or SYMBIOTIC)
@@ -225,14 +183,29 @@ contract TaiyiRegistryCoordinator is
     /// @notice Gets all registered middleware addresses
     /// @return Array of middleware addresses
     function getRestakingMiddleware() external view returns (address[] memory) {
-        uint256 length = restakingMiddleware.length();
-        address[] memory middlewares = new address[](length);
+        return restakingProtocolMap.addresses();
+    }
 
-        for (uint256 i = 0; i < length; i++) {
-            middlewares[i] = restakingMiddleware.at(i);
-        }
+    /// @notice Gets all middleware addresses for a specific protocol
+    /// @param protocol The protocol type to filter by
+    /// @return Array of middleware addresses for the specified protocol
+    function getRestakingMiddlewareByProtocol(RestakingProtocol protocol)
+        external
+        view
+        returns (address[] memory)
+    {
+        return restakingProtocolMap.addressesByProtocol(protocol);
+    }
 
-        return middlewares;
+    /// @notice Gets the protocol type for a middleware address
+    /// @param middleware The middleware address to query
+    /// @return The protocol type associated with the middleware
+    function getMiddlewareProtocol(address middleware)
+        external
+        view
+        returns (RestakingProtocol)
+    {
+        return restakingProtocolMap.get(middleware);
     }
 
     function _setRestakingProtocol(
@@ -241,16 +214,22 @@ contract TaiyiRegistryCoordinator is
     )
         internal
     {
-        restakingProtocol[_restakingMiddleware] = _restakingProtocol;
+        require(
+            _restakingMiddleware != address(0),
+            "RestakingMiddleware cannot be zero address"
+        );
+        restakingProtocolMap.set(_restakingMiddleware, _restakingProtocol);
+
+        emit RestakingMiddlewareUpdated(_restakingProtocol, _restakingMiddleware);
     }
 
+    // Todo: check operator stake allocation
     function _registerOperatorForEigenlayer(
         address operator,
         uint32[] memory operatorSetIds,
         bytes calldata data
     )
         internal
-        onlyAllocationManager
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(
@@ -269,11 +248,14 @@ contract TaiyiRegistryCoordinator is
         _setOperatorSocket(operatorId, socket);
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
-        for (uint32 i = 0; i < operatorSetIds.length; i++) {
-            uint32 encodedId =
-                operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
-            _operatorSets[encodedId].add(operator);
-        }
+        _operatorInfo[operator].operatorId = operatorId;
+        
+        // Use the library function to add operator to sets
+        _operatorSets.addOperatorToSets(
+            operatorSetIds,
+            RestakingProtocol.EIGENLAYER,
+            operator
+        );
     }
 
     function _deregisterOperatorForEigenlayer(
@@ -281,27 +263,40 @@ contract TaiyiRegistryCoordinator is
         uint32[] memory operatorSetIds
     )
         internal
-        onlyAllocationManager
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
         _deregisterOperatorFromOperatorSets(operator, operatorSetIds);
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        for (uint32 i = 0; i < operatorSetIds.length; i++) {
-            uint32 encodedId =
-                operatorSetIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
-            _operatorSets[encodedId].remove(operator);
-        }
+        
+        // Use the library function to remove operator from sets
+        _operatorSets.removeOperatorFromSets(
+            operatorSetIds,
+            RestakingProtocol.EIGENLAYER,
+            operator
+        );
     }
 
     /// @dev This function is only callable by the Eigenlayer middleware
     /// @inheritdoc ITaiyiRegistryCoordinator
     function createOperatorSet(IStrategy[] memory strategies)
         external
-        onlyEigenlayerMiddleware
         returns (uint32 operatorSetId)
     {
+        if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
+            _creatSymbioticSubnetwork();
+        } else {
+            _createEigenlayerOperatorSet(strategies);
+        }
+    }
+
+    function _creatSymbioticSubnetwork() internal returns(uint32 operatorSetId) {
+        // Todo
+    }
+
+    function _createEigenlayerOperatorSet(IStrategy[] memory strategies) internal returns(uint32 operatorSetId) {
+        _checkEigenlayerMiddleware();
         // Get the current operator set count from allocationManager
         uint256 currentSetCount = allocationManager.getOperatorSetCount(msg.sender);
 
@@ -319,6 +314,7 @@ contract TaiyiRegistryCoordinator is
 
         allocationManager.createOperatorSets(msg.sender, createSetParams);
         return operatorSetId;
+
     }
 
     function getOperatorSetOperators(
@@ -329,14 +325,13 @@ contract TaiyiRegistryCoordinator is
         view
         returns (address[] memory)
     {
+        uint32 encodedId;
         if (protocol == RestakingProtocol.EIGENLAYER) {
-            operatorSetId =
-                operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
-            return _operatorSets[operatorSetId].values();
+            encodedId = operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
         } else {
-            operatorSetId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
-            return _operatorSets[operatorSetId].values();
+            encodedId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
         }
+        return _operatorSets.getOperatorsInSet(encodedId);
     }
 
     /**
@@ -354,7 +349,7 @@ contract TaiyiRegistryCoordinator is
         returns (address)
     {
         // Check if the operator is in the set
-        if (_operatorSets[operatorSetId].contains(operator)) {
+        if (_operatorSets.isOperatorInSet(operatorSetId, operator)) {
             return operator;
         }
         return address(0);
@@ -367,7 +362,7 @@ contract TaiyiRegistryCoordinator is
     }
 
     /**
-     * @notice Gets the operator set
+     * @notice Gets the operators in a operator set
      * @param operatorSetId The operator set ID
      * @return The operator set
      */
@@ -379,13 +374,31 @@ contract TaiyiRegistryCoordinator is
         view
         returns (address[] memory)
     {
+        uint32 encodedId;
         if (protocol == RestakingProtocol.EIGENLAYER) {
-            operatorSetId =
-                operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
+            encodedId = operatorSetId.encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
         } else {
-            operatorSetId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+            encodedId = operatorSetId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
         }
-        return _operatorSets[operatorSetId].values();
+        return _operatorSets.getOperatorsInSet(encodedId);
+    }
+
+    /**
+     * @notice Gets the number of operators in a specific operator set
+     * @param operatorSetId The operator set ID
+     * @param protocol The protocol type
+     * @return The number of operators in the set
+     */
+    function getOperatorSetSize(
+        uint32 operatorSetId,
+        RestakingProtocol protocol
+    )
+        external
+        view
+        returns (uint256)
+    {
+        uint32 encodedId = operatorSetId.encodeOperatorSetId(protocol);
+        return _operatorSets.getOperatorSetLength(encodedId);
     }
 
     // Todo: add symbiotic support
@@ -433,6 +446,7 @@ contract TaiyiRegistryCoordinator is
         });
     }
 
+    // Todo: add symbiotic support
     function _deregisterOperatorFromOperatorSets(
         address operator,
         uint32[] memory operatorSetIds
@@ -450,10 +464,11 @@ contract TaiyiRegistryCoordinator is
         );
     }
 
-    function _checkAllocationManager() internal view {
+
+    function _checkEigenlayerMiddleware() internal view {
         require(
-            msg.sender == address(allocationManager),
-            "OnlyAllocationManager: sender must be allocationManager"
+            restakingProtocolMap.get(msg.sender) == RestakingProtocol.EIGENLAYER,
+            OnlyEigenlayerMiddleware()
         );
     }
 
@@ -499,10 +514,6 @@ contract TaiyiRegistryCoordinator is
         socketRegistry.setOperatorSocket(operatorId, socket);
         emit OperatorSocketUpdate(operatorId, socket);
     }
-
-    /// ========================================================================================
-    /// ============== EIGENLAYER IN-PROTOCOL OPERATOR VIEW FUNCTIONS ==========================
-    /// ========================================================================================
 
     // Todo: add symbiotic support
     /// @notice Returns all operator sets that an operator has allocated magnitude to
@@ -663,7 +674,6 @@ contract TaiyiRegistryCoordinator is
         bytes calldata /*data*/
     )
         internal
-        onlySymbioticMiddleware
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(
@@ -671,11 +681,13 @@ contract TaiyiRegistryCoordinator is
         );
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
-        for (uint32 i = 0; i < subnetworkIds.length; i++) {
-            uint32 encodedId =
-                subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
-            _operatorSets[encodedId].add(operator);
-        }
+        
+        // Use the library function to add operator to sets
+        _operatorSets.addOperatorToSets(
+            subnetworkIds,
+            RestakingProtocol.SYMBIOTIC,
+            operator
+        );
     }
 
     /// @notice Deregister an operator from the Symbiotic protocol
@@ -687,16 +699,17 @@ contract TaiyiRegistryCoordinator is
         uint32[] memory subnetworkIds
     )
         internal
-        onlySymbioticMiddleware
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        for (uint32 i = 0; i < subnetworkIds.length; i++) {
-            uint32 encodedId =
-                subnetworkIds[i].encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
-            _operatorSets[encodedId].remove(operator);
-        }
+        
+        // Use the library function to remove operator from sets
+        _operatorSets.removeOperatorFromSets(
+            subnetworkIds, 
+            RestakingProtocol.SYMBIOTIC,
+            operator
+        );
     }
 }

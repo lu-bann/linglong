@@ -79,6 +79,9 @@ interface ITaiyiRegistryCoordinator {
     /// @notice Error thrown when a caller is not the EigenLayer middleware
     error OnlyEigenlayerMiddleware();
 
+    /// @notice Error thrown when a caller is not the symbiotic middleware
+    error OnlySymbioticMiddleware();
+
     /// @notice Error thrown when an operator is not registered
     error OperatorNotDeregistered();
 
@@ -108,14 +111,6 @@ interface ITaiyiRegistryCoordinator {
     /// @notice Updates the socket address for the calling operator
     /// @param socket The new socket address to set
     function updateSocket(string memory socket) external;
-
-    /// @notice Sets the restaking middleware address
-    /// @param _restakingMiddleware The new restaking middleware address
-    function setRestakingMiddleware(address _restakingMiddleware) external;
-
-    /// @notice Sets the EigenLayer middleware address
-    /// @param _eigenlayerMiddleware The new EigenLayer middleware address
-    function setEigenlayerMiddleware(address _eigenlayerMiddleware) external;
 
     /**
      * @notice Register an operator with the specified operator set IDs

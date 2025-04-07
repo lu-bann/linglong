@@ -6,6 +6,7 @@ import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
 import { ServiceTypeLib } from "../libs/ServiceTypeLib.sol";
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import {
     IAllocationManager,
     IAllocationManagerTypes
@@ -27,7 +28,7 @@ import { EnumerableSet } from
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | allocationManager    | contract IAllocationManager                                          | 3    | 0      | 20    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
-// | _operatorSets        | mapping(uint32 => struct EnumerableSet.AddressSet)                   | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
+// | _operatorSets        | struct OperatorSubsetLib.OperatorSets                                | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorInfo        | mapping(address => struct ITaiyiRegistryCoordinator.OperatorInfo)    | 5    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
@@ -64,8 +65,8 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     /// @notice the AllocationManager that tracks OperatorSets and Slashing in EigenLayer
     IAllocationManager public allocationManager;
 
-    /// @notice maps operator set id => operator addresses
-    mapping(uint32 => EnumerableSet.AddressSet) internal _operatorSets;
+    /// @notice operator sets with protocol type information
+    OperatorSubsetLib.OperatorSets internal _operatorSets;
 
     /// @notice maps operator address => operator id and status
     mapping(address => OperatorInfo) internal _operatorInfo;

@@ -63,6 +63,7 @@ contract SymbioticNetworkMiddleware is
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using Subnetwork for address;
+    using Subnetwork for bytes32;
     using ServiceTypeLib for ITaiyiRegistryCoordinator.RestakingServiceTypes;
 
     // ======= REGISTRY INTEGRATION =========
