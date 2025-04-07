@@ -41,8 +41,6 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
     /// @notice Count of open challenges.
     uint256 public openChallengeCount;
 
-    address underwriterAddress;
-
     constructor(
         address _initialOwner,
         address _verifierGateway,
@@ -304,7 +302,7 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             uint64 proofBlockTimestamp,
             bytes32 proofBlockHash,
             uint64 proofBlockNumber,
-            address _underwriterAddress,
+            address underwriterAddress,
             bytes memory signature,
             uint64 genesisTimestamp,
             address taiyiCore
@@ -346,7 +344,7 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         }
 
         // Verify the proof commitment signer matches the challenge commitment signer
-        if (_underwriterAddress != challenge.commitmentSigner) {
+        if (underwriterAddress != challenge.commitmentSigner) {
             revert CommitmentSignerDoesNotMatch();
         }
 
