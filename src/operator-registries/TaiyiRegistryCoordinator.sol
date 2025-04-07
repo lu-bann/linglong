@@ -223,7 +223,7 @@ contract TaiyiRegistryCoordinator is
         emit RestakingMiddlewareUpdated(_restakingProtocol, _restakingMiddleware);
     }
 
-    // Todo: check operator stake allocation
+    // Todo: check operator stake allocatnnfang9560
     function _registerOperatorForEigenlayer(
         address operator,
         uint32[] memory operatorSetIds,
