@@ -23,6 +23,8 @@ library OperatorSubsetLib {
 
     /// @notice Structure to store operator sets with their members
     struct OperatorSets {
+        EnumerableSet.UintSet operatorSetIds;
+        // set id to operator address mapping
         mapping(uint32 => EnumerableSet.AddressSet) sets;
     }
 
@@ -89,15 +91,8 @@ library OperatorSubsetLib {
     /// @param avs The AVS address
     /// @param encodedId The encoded operator set ID
     /// @return An operator set with the encoded ID
-    function createOperatorSet(
-        address avs,
-        uint32 encodedId
-    )
-        internal
-        pure
-        returns (OperatorSet memory)
-    {
-        return OperatorSet({ avs: avs, id: encodedId });
+    function createOperatorSet(uint32 encodedId) internal pure returns (bool) {
+        return operatorSet.operatorSetIds.add(encodedId);
     }
 
     // ======== OPERATOR SET MANAGEMENT FUNCTIONS ========
@@ -115,7 +110,11 @@ library OperatorSubsetLib {
         internal
         returns (bool)
     {
-        return operatorSets.sets[operatorSetId].add(operator);
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].add(operator);
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
 
     /// @notice Adds an operator to multiple operator sets at once
@@ -150,7 +149,11 @@ library OperatorSubsetLib {
         internal
         returns (bool)
     {
-        return operatorSets.sets[operatorSetId].remove(operator);
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].remove(operator);
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
 
     /// @notice Removes an operator from multiple operator sets at once
@@ -186,7 +189,11 @@ library OperatorSubsetLib {
         view
         returns (bool)
     {
-        return operatorSets.sets[operatorSetId].contains(operator);
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].contains(operator);
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
 
     /// @notice Gets all operators in a specific operator set
@@ -201,7 +208,11 @@ library OperatorSubsetLib {
         view
         returns (address[] memory)
     {
-        return operatorSets.sets[operatorSetId].values();
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].values();
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
 
     /// @notice Gets the number of operators in a specific operator set
@@ -216,14 +227,17 @@ library OperatorSubsetLib {
         view
         returns (uint256)
     {
-        return operatorSets.sets[operatorSetId].length();
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].length();
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
-
-    /// @notice Gets an operator from a set by index
     /// @param operatorSets The storage reference to operator sets mapping
     /// @param operatorSetId The encoded ID of the operator set
     /// @param index The index of the operator to retrieve
     /// @return The operator address at the given index
+
     function getOperatorAt(
         OperatorSets storage operatorSets,
         uint32 operatorSetId,
@@ -233,6 +247,10 @@ library OperatorSubsetLib {
         view
         returns (address)
     {
-        return operatorSets.sets[operatorSetId].at(index);
+        if (operatorSets.operatorSetIds.contains(operatorSetId)) {
+            return operatorSets.sets[operatorSetId].at(index);
+        } else {
+            revert OperatorSetLib__OperatorSetDoesNotExist();
+        }
     }
 }

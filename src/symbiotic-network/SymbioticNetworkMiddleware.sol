@@ -37,8 +37,6 @@ import { Subnetwork } from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import { INetworkRegistry } from "@symbiotic/interfaces/INetworkRegistry.sol";
 import { IVault } from "@symbiotic/interfaces/vault/IVault.sol";
 
-import { ServiceTypeLib } from "../libs/ServiceTypeLib.sol";
-
 // Add Registry imports for validator registration
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
@@ -64,7 +62,6 @@ contract SymbioticNetworkMiddleware is
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using Subnetwork for address;
     using Subnetwork for bytes32;
-    using ServiceTypeLib for ITaiyiRegistryCoordinator.RestakingServiceTypes;
 
     // ======= REGISTRY INTEGRATION =========
 
@@ -108,8 +105,9 @@ contract SymbioticNetworkMiddleware is
 
     ITaiyiRegistryCoordinator public registryCoordinator;
 
-    uint96 public constant VALIDATOR_SUBNETWORK = 1;
-    uint96 public constant UNDERWRITER_SUBNETWORK = 2;
+    uint96 public constant VALIDATOR_SUBNETWORK = 0;
+    uint96 public constant UNDERWRITER_SUBNETWORK = 1;
+    uint96 public constant SUBNETWORK_COUNT = 0;
 
     struct SlashParams {
         uint48 timestamp;
@@ -117,6 +115,17 @@ contract SymbioticNetworkMiddleware is
         uint256 amount;
         bytes32 subnetwork;
         bytes[] slashHints;
+    }
+
+    modifier onlyValidatorSubnetwork() {
+        if (
+            REGISTRY_COORDINATOR.getOperatorFromOperatorSet(
+                uint32(VALIDATOR_SUBNETWORK), msg.sender
+            ) == address(0)
+        ) {
+            revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
+        }
+        _;
     }
 
     /// @notice Disables initializers for the implementation contract
@@ -167,9 +176,23 @@ contract SymbioticNetworkMiddleware is
         REGISTRY = Registry(_registry);
     }
 
-    function setupSubnetworks() external {
+    function initializeSubnetworks() external onlyOwner {
         super.registerSubnetwork(VALIDATOR_SUBNETWORK);
-        super.registerSubnetwork(UNDERWRITER_SUBNETWORK);
+        uint32 encodedValidatorSubnetworkId =
+            uint32(VALIDATOR_SUBNETWORK).encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+        REGISTRY_COORDINATOR.createOperatorSet(encodedValidatorSubnetworkId);
+        uint32 encodedUnderwriterSubnetworkId = uint32(UNDERWRITER_SUBNETWORK)
+            .encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+        REGISTRY_COORDINATOR.createOperatorSet(encodedUnderwriterSubnetworkId);
+        SUBNETWORK_COUNT = 2;
+    }
+
+    function createNewSubnetwork(uint32 subnetworkId) external onlyOwner {
+        require(subnetworkId > SUBNETWORK_COUNT, "Subnetwork already exists");
+        uint32 encodedSubnetworkId =
+            subnetworkId.encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+        REGISTRY_COORDINATOR.createOperatorSet(encodedSubnetworkId);
+        SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
     }
 
     /// @notice Set the rewards handler contract
@@ -189,7 +212,7 @@ contract SymbioticNetworkMiddleware is
         bytes memory key,
         address vault,
         bytes memory signature,
-        uint96 subnetwork
+        uint32[] subnetworks
     )
         external
         override
@@ -202,15 +225,13 @@ contract SymbioticNetworkMiddleware is
         _verifyKey(msg.sender, key, signature);
         super._registerOperatorImpl(msg.sender, key, vault);
 
-        ITaiyiRegistryCoordinator.RestakingServiceTypes serviceType = subnetwork
-            == VALIDATOR_SUBNETWORK
-            ? ITaiyiRegistryCoordinator.RestakingServiceTypes.SYMBIOTIC_VALIDATOR
-            : ITaiyiRegistryCoordinator.RestakingServiceTypes.SYMBIOTIC_UNDERWRITER;
-        uint32 serviceTypeId = serviceType.toId();
+        uint32[] subnetworkIds = new uint32[](subnetworks.length);
+        for (uint256 i = 0; i < subnetworks.length; i++) {
+            subnetworkIds[i] =
+                subnetworks[i].encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+        }
 
-        registryCoordinator.registerOperatorForSymbiotic(
-            msg.sender, serviceTypeId, bytes("")
-        );
+        registryCoordinator.registerOperator(msg.sender, subnetworkIds, bytes(""));
     }
 
     /// @notice Register multiple validators for a single transaction
@@ -225,23 +246,21 @@ contract SymbioticNetworkMiddleware is
         external
         payable
         override
+        onlyValidatorSubnetwork
         returns (bytes32 registrationRoot)
     {
-        // Verify the operator is registered in the validator subnetwork
-        address operator = msg.sender;
         if (
             registryCoordinator.getOperatorFromOperatorSet(
-                uint32(VALIDATOR_SUBNETWORK), operator
+                uint32(VALIDATOR_SUBNETWORK), msg.sender
             ) == address(0)
         ) {
             revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
 
-        // Verify the delegatee address is registered in the underwriter subnetwork
         if (
             registryCoordinator.getOperatorFromOperatorSet(
                 uint32(UNDERWRITER_SUBNETWORK), delegateeAddress
-            ) == address(0)
+            ) == address(1)
         ) {
             revert OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
         }
@@ -255,38 +274,15 @@ contract SymbioticNetworkMiddleware is
         // always use avs contract address as the owner of the operator
         registrationRoot =
             REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
-
-        // Store the registration info for this operator
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
-        roots.add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
-        }
-
-        emit ValidatorRegistered(operator, registrationRoot);
-        return registrationRoot;
     }
 
     /// @notice Unregister validators for a registration root
     /// @inheritdoc ISymbioticNetworkMiddleware
-    function unregisterValidators(bytes32 registrationRoot) external override {
+    function unregisterValidators(bytes32 registrationRoot)
+        external
+        override
+        onlyValidatorSubnetwork
+    {
         // Ensure the registration root is valid for this operator
         if (
             registrationRoot == bytes32(0)
@@ -327,6 +323,7 @@ contract SymbioticNetworkMiddleware is
     )
         external
         override
+        onlyValidatorSubnetwork
     {
         address operator = msg.sender;
         (address owner,,, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =

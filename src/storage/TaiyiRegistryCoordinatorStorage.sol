@@ -5,7 +5,6 @@ import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
 import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { ServiceTypeLib } from "../libs/ServiceTypeLib.sol";
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import {
     IAllocationManager,
@@ -73,6 +72,9 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
 
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
     address public eigenlayerMiddleware;
+
+    /// @notice The symbiotic middleware address for this AVS
+    address public symbioticMiddleware;
 
     /// @notice The restaking middleware addresses
     EnumerableSet.AddressSet internal restakingMiddleware;

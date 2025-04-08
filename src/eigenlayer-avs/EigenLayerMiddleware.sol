@@ -215,15 +215,14 @@ contract EigenLayerMiddleware is
     /// @notice Create an operator set with the given strategies
     function createOperatorSet(IStrategy[] memory strategies)
         external
-        onlyOwner
         returns (uint32 operatorSetId)
     {
         // Get the current operator set count from allocationManager
         uint256 currentSetCount =
             IAllocationManager(ALLOCATION_MANAGER).getOperatorSetCount(address(this));
 
-        // Use the current count as the next ID
-        operatorSetId = uint32(currentSetCount);
+        operatorSetId =
+            uint32(currentSetCount).encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
 
         IAllocationManagerTypes.CreateSetParams[] memory createSetParams =
             new IAllocationManagerTypes.CreateSetParams[](1);
@@ -236,6 +235,8 @@ contract EigenLayerMiddleware is
         IAllocationManager(ALLOCATION_MANAGER).createOperatorSets(
             address(this), createSetParams
         );
+
+        REGISTRY_COORDINATOR.createOperatorSet(operatorSetId);
 
         return operatorSetId;
     }

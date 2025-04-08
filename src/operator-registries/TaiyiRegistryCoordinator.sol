@@ -60,18 +60,15 @@ contract TaiyiRegistryCoordinator is
     RestakingProtocolMap.Map internal restakingProtocolMap;
 
     /// @notice Emitted when a new middleware is added or updated
-    event RestakingMiddlewareUpdated(RestakingProtocol restakingProtocol, address newMiddleware);
+    event RestakingMiddlewareUpdated(
+        RestakingProtocol restakingProtocol, address newMiddleware
+    );
 
     // ======== END NEW PROTOCOL TYPE HANDLING =======
 
-
-
     /// @notice Modifier that allows only registered middleware contracts to call a function
     modifier onlyRestakingMiddleware() {
-        require(
-            restakingProtocolMap.get(msg.sender) != RestakingProtocol.None,
-            OnlyRestakingMiddleware()
-        );
+        require(restakingProtocolMap.contains(msg.sender), OnlyRestakingMiddleware());
         _;
     }
 
@@ -118,7 +115,7 @@ contract TaiyiRegistryCoordinator is
     {
         if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
             _registerOperatorForSymbiotic(operator, operatorSetIds, data);
-        } else {
+        } else if (msg.sender == address(allocationManager)) {
             _registerOperatorForEigenlayer(operator, operatorSetIds, data);
         }
     }
@@ -134,7 +131,7 @@ contract TaiyiRegistryCoordinator is
     {
         if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
             _deregisterOperatorForSymbiotic(operator, operatorSetIds);
-        } else {
+        } else if (msg.sender == address(allocationManager)) {
             _deregisterOperatorForEigenlayer(operator, operatorSetIds);
         }
     }
@@ -223,7 +220,7 @@ contract TaiyiRegistryCoordinator is
         emit RestakingMiddlewareUpdated(_restakingProtocol, _restakingMiddleware);
     }
 
-    // Todo: check operator stake allocatnnfang9560
+    // Todo: check operator stake
     function _registerOperatorForEigenlayer(
         address operator,
         uint32[] memory operatorSetIds,
@@ -249,12 +246,10 @@ contract TaiyiRegistryCoordinator is
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         _operatorInfo[operator].operatorId = operatorId;
-        
+
         // Use the library function to add operator to sets
         _operatorSets.addOperatorToSets(
-            operatorSetIds,
-            RestakingProtocol.EIGENLAYER,
-            operator
+            operatorSetIds, RestakingProtocol.EIGENLAYER, operator
         );
     }
 
@@ -269,52 +264,16 @@ contract TaiyiRegistryCoordinator is
 
         _deregisterOperatorFromOperatorSets(operator, operatorSetIds);
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        
-        // Use the library function to remove operator from sets
+
         _operatorSets.removeOperatorFromSets(
-            operatorSetIds,
-            RestakingProtocol.EIGENLAYER,
-            operator
+            operatorSetIds, RestakingProtocol.EIGENLAYER, operator
         );
     }
 
-    /// @dev This function is only callable by the Eigenlayer middleware
+    /// @dev This function is only callable by the Eigenlayer middleware or Symbiotic middleware
     /// @inheritdoc ITaiyiRegistryCoordinator
-    function createOperatorSet(IStrategy[] memory strategies)
-        external
-        returns (uint32 operatorSetId)
-    {
-        if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
-            _creatSymbioticSubnetwork();
-        } else {
-            _createEigenlayerOperatorSet(strategies);
-        }
-    }
-
-    function _creatSymbioticSubnetwork() internal returns(uint32 operatorSetId) {
-        // Todo
-    }
-
-    function _createEigenlayerOperatorSet(IStrategy[] memory strategies) internal returns(uint32 operatorSetId) {
-        _checkEigenlayerMiddleware();
-        // Get the current operator set count from allocationManager
-        uint256 currentSetCount = allocationManager.getOperatorSetCount(msg.sender);
-
-        // Use the current count as the next ID
-        operatorSetId =
-            uint32(currentSetCount).encodeOperatorSetId(RestakingProtocol.EIGENLAYER);
-
-        IAllocationManagerTypes.CreateSetParams[] memory createSetParams =
-            new IAllocationManagerTypes.CreateSetParams[](1);
-
-        createSetParams[0] = IAllocationManagerTypes.CreateSetParams({
-            operatorSetId: operatorSetId,
-            strategies: strategies
-        });
-
-        allocationManager.createOperatorSets(msg.sender, createSetParams);
-        return operatorSetId;
-
+    function createOperatorSet(uint32 operatorSetId) external onlyRestakingMiddleware {
+        _operatorSets.createOperatorSet(operatorSetId);
     }
 
     function getOperatorSetOperators(
@@ -355,10 +314,12 @@ contract TaiyiRegistryCoordinator is
         return address(0);
     }
 
-    // Todo: add symbiotic support
     function getOperatorSetCount() external view returns (uint32) {
-        // Convert uint256 to uint32 for the return value
-        return uint32(allocationManager.getOperatorSetCount(msg.sender));
+        if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
+            return uint32(symbioticMiddleware.SUBNETWORK_COUNT);
+        } else {
+            return uint32(allocationManager.getOperatorSetCount(eigenlayerMiddleware));
+        }
     }
 
     /**
@@ -446,7 +407,6 @@ contract TaiyiRegistryCoordinator is
         });
     }
 
-    // Todo: add symbiotic support
     function _deregisterOperatorFromOperatorSets(
         address operator,
         uint32[] memory operatorSetIds
@@ -461,14 +421,6 @@ contract TaiyiRegistryCoordinator is
                 avs: avs,
                 operatorSetIds: operatorSetIds
             })
-        );
-    }
-
-
-    function _checkEigenlayerMiddleware() internal view {
-        require(
-            restakingProtocolMap.get(msg.sender) == RestakingProtocol.EIGENLAYER,
-            OnlyEigenlayerMiddleware()
         );
     }
 
@@ -663,6 +615,7 @@ contract TaiyiRegistryCoordinator is
     // ======= SYMBIOTIC SPECIFIC ===========
     // ======================================
 
+    // Todo: check add stake
     /// @notice Register an operator for the Symbiotic protocol
     /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs
     /// @param operator The operator to register
@@ -681,12 +634,10 @@ contract TaiyiRegistryCoordinator is
         );
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
-        
+
         // Use the library function to add operator to sets
         _operatorSets.addOperatorToSets(
-            subnetworkIds,
-            RestakingProtocol.SYMBIOTIC,
-            operator
+            subnetworkIds, RestakingProtocol.SYMBIOTIC, operator
         );
     }
 
@@ -704,12 +655,10 @@ contract TaiyiRegistryCoordinator is
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        
+
         // Use the library function to remove operator from sets
         _operatorSets.removeOperatorFromSets(
-            subnetworkIds, 
-            RestakingProtocol.SYMBIOTIC,
-            operator
+            subnetworkIds, RestakingProtocol.SYMBIOTIC, operator
         );
     }
 }
