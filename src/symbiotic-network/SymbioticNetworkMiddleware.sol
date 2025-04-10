@@ -46,6 +46,8 @@ import { BLS } from "@urc/lib/BLS.sol";
 import { ISymbioticNetworkMiddleware } from
     "../interfaces/ISymbioticNetworkMiddleware.sol";
 
+import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
+
 /// @title SymbioticNetworkMiddleware
 /// @notice A unified middleware contract that manages both gateway and validator networks in the Symbiotic ecosystem
 /// @dev Implements subnetwork functionality to handle both gateway and validator operators
@@ -557,16 +559,6 @@ contract SymbioticNetworkMiddleware is
         return registryCoordinator;
     }
 
-    /// @notice Get the address validator constant
-    function VALIDATOR_SUBNETWORK() external pure override returns (uint96) {
-        return 1;
-    }
-
-    /// @notice Get the underwriter constant
-    function UNDERWRITER_SUBNETWORK() external pure override returns (uint96) {
-        return 2;
-    }
-
     /// @notice Gets the operator's address for a given key and verifies they can be slashed
     /// @param key The address key to look up
     /// @param timestamp The timestamp to check activity at
@@ -614,7 +606,10 @@ contract SymbioticNetworkMiddleware is
     }
 
     /// @inheritdoc ISymbioticNetworkMiddleware
-    function getOperatorCollaterals(address operator)
+    function getOperatorCollaterals(
+        address operator,
+        uint96 subnetworkId
+    )
         external
         view
         override
@@ -636,11 +631,8 @@ contract SymbioticNetworkMiddleware is
             vaults[i] = vault;
             collateralTokens[i] = IVault(vault).collateral();
 
-            uint256 validatorPower =
-                super._getOperatorPower(operator, vault, VALIDATOR_SUBNETWORK);
-            uint256 underwriterPower =
-                super._getOperatorPower(operator, vault, UNDERWRITER_SUBNETWORK);
-            stakedAmounts[i] = validatorPower + underwriterPower;
+            uint256 power = super._getOperatorPower(operator, vault, subnetworkId);
+            stakedAmounts[i] = power;
         }
 
         return (vaults, collateralTokens, stakedAmounts);
@@ -653,6 +645,96 @@ contract SymbioticNetworkMiddleware is
         override
         returns (uint256)
     {
-        return _totalPower(operators);
+        return super._totalPower(operators);
+    }
+
+    /// @notice Retrieves strategies for a given operator set ID
+    /// @param operatorSetId The operator set ID
+    /// @return Array of unique collateral tokens (strategies) for the operator set
+    function getSubnetworkStrategies(uint32 subnetworkId)
+        external
+        view
+        returns (address[] memory)
+    {
+        // Check if the subnetwork was active at the current capture timestamp
+        if (!super._subnetworkWasActiveAt(getCaptureTimestamp(), uint96(subnetworkId))) {
+            revert SubnetworkNotActive();
+        }
+
+        // Get active operators
+        address[] memory operators = super._activeOperators();
+
+        // Use Solady's EnumerableSetLib for efficient deduplication
+        EnumerableSetLib.AddressSet memory uniqueTokens;
+
+        // Collect unique tokens from all operators
+        for (uint256 i = 0; i < operators.length; i++) {
+            (, address[] memory collaterals,) =
+                getOperatorCollaterals(operators[i], uint96(subnetworkId));
+
+            for (uint256 j = 0; j < collaterals.length; j++) {
+                if (collaterals[j] != address(0)) {
+                    uniqueTokens.add(collaterals[j]);
+                }
+            }
+        }
+
+        return uniqueTokens.values();
+    }
+
+    /// @notice Gets all subnetworks that have allocated stake to a specific operator
+    /// @param operator The operator address to check
+    /// @return allocatedSubnetworks Array of subnetwork IDs that have stake allocated to the operator
+    function getOperatorAllocatedSubnetworks(address operator)
+        external
+        view
+        returns (uint32[] memory allocatedSubnetworks)
+    {
+        // Use EnumerableSetLib for deduplication
+        EnumerableSetLib.Uint32Set memory uniqueSubnetworks;
+
+        // Check each subnetwork up to the SUBNETWORK_COUNT
+        for (uint32 i = 0; i < SUBNETWORK_COUNT; i++) {
+            // Get operator's vaults and check if they have stake in this subnetwork
+            (,, uint256[] memory stakedAmounts) =
+                getOperatorCollaterals(operator, uint96(i));
+
+            // If operator has any stake in this subnetwork, add it to the set
+            bool hasStake = false;
+            for (uint256 j = 0; j < stakedAmounts.length; j++) {
+                if (stakedAmounts[j] > 0) {
+                    hasStake = true;
+                    break;
+                }
+            }
+
+            if (hasStake) {
+                uniqueSubnetworks.add(i);
+            }
+        }
+
+        // Convert the set to array for return
+        allocatedSubnetworks = uniqueSubnetworks.values();
+    }
+
+    /// @notice Gets all operator sets that an operator has allocated magnitude to in Symbiotic
+    /// @param operator The operator whose allocated sets to fetch
+    /// @return operatorSetIds Array of operator set IDs that the operator has allocated magnitude to
+    function getOperatorAllocatedOperatorSets(address operator)
+        external
+        view
+        returns (uint32[] memory operatorSetIds)
+    {
+        // Get subnetworks with allocation
+        uint32[] memory subnetworks = this.getOperatorAllocatedSubnetworks(operator);
+
+        // Create array for operator set IDs
+        operatorSetIds = new uint32[](subnetworks.length);
+
+        // Convert subnetwork IDs to operator set IDs
+        for (uint256 i = 0; i < subnetworks.length; i++) {
+            operatorSetIds[i] =
+                subnetworks[i].encodeOperatorSetId(RestakingProtocol.SYMBIOTIC);
+        }
     }
 }

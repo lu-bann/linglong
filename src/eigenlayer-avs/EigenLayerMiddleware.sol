@@ -54,16 +54,25 @@ contract EigenLayerMiddleware is
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
 
+    // ==============================================================================================
+    // ================================= STATE VARIABLES ============================================
+    // ==============================================================================================
+
     /// @notice Reference to the rewards handler contract
     EigenLayerRewardsHandler public rewardsHandler;
 
-    // ========= EVENTS =========
+    // ==============================================================================================
+    // ================================= EVENTS ====================================================
+    // ==============================================================================================
+
     event RewardsHandlerSet(address rewardsHandler);
 
     // Custom error defined only in this contract (not in the interface)
     error RewardsHandlerNotSet();
 
-    // ========= MODIFIERS =========
+    // ==============================================================================================
+    // ================================= MODIFIERS =================================================
+    // ==============================================================================================
 
     /// @notice Modifier that restricts function access to operators registered
     /// in EigenLayer core
@@ -95,26 +104,14 @@ contract EigenLayerMiddleware is
         _;
     }
 
+    // ==============================================================================================
+    // ================================= CONSTRUCTOR & INITIALIZER =================================
+    // ==============================================================================================
+
     // Replace constructor with disable-initializers
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
-    }
-
-    // ========= EXTERNAL FUNCTIONS =========
-
-    /// @notice Sets the rewards initiator address
-    /// @param newRewardsInitiator The new rewards initiator address
-    /// @dev only callable by the owner
-    function setRewardsInitiator(address newRewardsInitiator) external onlyOwner {
-        _setRewardsInitiator(newRewardsInitiator);
-    }
-
-    /// @notice Set the rewards handler contract
-    /// @param _rewardsHandler Address of the rewards handler contract
-    function setRewardsHandler(address _rewardsHandler) external onlyOwner {
-        rewardsHandler = EigenLayerRewardsHandler(_rewardsHandler);
-        emit RewardsHandlerSet(_rewardsHandler);
     }
 
     /// @notice Initialize the contract
@@ -152,6 +149,10 @@ contract EigenLayerMiddleware is
         SLASHER = address(ILinglongSlasher(_slasher));
         ALLOCATION_MANAGER = _allocationManager;
     }
+
+    // ==============================================================================================
+    // ================================= EXTERNAL WRITE FUNCTIONS ==================================
+    // ==============================================================================================
 
     /// @notice Register multiple validators for a single transaction
     function registerValidators(
@@ -241,31 +242,60 @@ contract EigenLayerMiddleware is
         return operatorSetId;
     }
 
-    /// @notice Add strategies to an operator set
-    function addStrategiesToOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
+    /// @notice Opt in to slasher contract
+    function optInToSlasher(
+        bytes32 registrationRoot,
+        IRegistry.Registration[] calldata registrations,
+        BLS.G2Point[] calldata delegationSignatures,
+        BLS.G1Point calldata delegateePubKey,
+        address delegateeAddress,
+        bytes[] calldata data
     )
         external
-        onlyOwner
     {
-        _addStrategiesToOperatorSet(operatorSetId, strategies);
+        REGISTRY.optInToSlasher(registrationRoot, SLASHER, address(this));
+
+        DelegationStore storage delegationStore =
+            operatorDelegations[msg.sender][registrationRoot];
+
+        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
+        roots.add(registrationRoot);
+
+        for (uint256 i = 0; i < registrations.length; ++i) {
+            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
+                delegation: ISlasher.Delegation({
+                    proposer: registrations[i].pubkey,
+                    delegate: delegateePubKey,
+                    committer: delegateeAddress,
+                    slot: type(uint64).max,
+                    metadata: data[i]
+                }),
+                signature: delegationSignatures[i]
+            });
+
+            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
+
+            delegationStore.delegations[pubkeyHash] = signedDelegation;
+            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
+        }
     }
 
-    /// @notice Remove strategies from an operator set
-    function removeStrategiesFromOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
+    /// @notice Process a rewards claim
+    function processClaim(
+        IRewardsCoordinator.RewardsMerkleClaim calldata claim,
+        address recipient
     )
         external
-        onlyOwner
     {
-        _removeStrategiesFromOperatorSet(operatorSetId, strategies);
+        _processClaim(claim, recipient);
     }
 
-    /// @notice Updates the metadata URI for the AVS
-    function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
-        _updateAVSMetadataURI(metadataURI);
+    /// @notice Create AVS rewards submission (deprecated)
+    function createAVSRewardsSubmission(IRewardsCoordinator.RewardsSubmission[] calldata)
+        external
+        pure
+    {
+        revert UseCreateOperatorDirectedAVSRewardsSubmission();
     }
 
     /// @notice Creates operator-directed rewards
@@ -327,68 +357,63 @@ contract EigenLayerMiddleware is
         );
     }
 
+    // ==============================================================================================
+    // ================================= OWNER/ADMIN FUNCTIONS =====================================
+    // ==============================================================================================
+
+    /// @notice Sets the rewards initiator address
+    /// @param newRewardsInitiator The new rewards initiator address
+    /// @dev only callable by the owner
+    function setRewardsInitiator(address newRewardsInitiator) external onlyOwner {
+        _setRewardsInitiator(newRewardsInitiator);
+    }
+
+    /// @notice Set the rewards handler contract
+    /// @param _rewardsHandler Address of the rewards handler contract
+    function setRewardsHandler(address _rewardsHandler) external onlyOwner {
+        rewardsHandler = EigenLayerRewardsHandler(_rewardsHandler);
+        emit RewardsHandlerSet(_rewardsHandler);
+    }
+
+    /// @notice Add strategies to an operator set
+    function addStrategiesToOperatorSet(
+        uint32 operatorSetId,
+        IStrategy[] memory strategies
+    )
+        external
+        onlyOwner
+    {
+        _addStrategiesToOperatorSet(operatorSetId, strategies);
+    }
+
+    /// @notice Remove strategies from an operator set
+    function removeStrategiesFromOperatorSet(
+        uint32 operatorSetId,
+        IStrategy[] memory strategies
+    )
+        external
+        onlyOwner
+    {
+        _removeStrategiesFromOperatorSet(operatorSetId, strategies);
+    }
+
+    /// @notice Updates the metadata URI for the AVS
+    function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
+        _updateAVSMetadataURI(metadataURI);
+    }
+
     /// @notice Set the address of the entity that can call `processClaim`
     function setClaimerFor(address claimer) external onlyOwner {
         _setClaimerFor(claimer);
     }
 
-    /// @notice Create AVS rewards submission (deprecated)
-    function createAVSRewardsSubmission(IRewardsCoordinator.RewardsSubmission[] calldata)
-        external
-        pure
-    {
-        revert UseCreateOperatorDirectedAVSRewardsSubmission();
-    }
+    /// @notice Authorizes contract upgrades
+    /// @param newImplementation Address of new implementation contract
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 
-    /// @notice Process a rewards claim
-    function processClaim(
-        IRewardsCoordinator.RewardsMerkleClaim calldata claim,
-        address recipient
-    )
-        external
-    {
-        _processClaim(claim, recipient);
-    }
-
-    /// @notice Opt in to slasher contract
-    function optInToSlasher(
-        bytes32 registrationRoot,
-        IRegistry.Registration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
-        external
-    {
-        REGISTRY.optInToSlasher(registrationRoot, SLASHER, address(this));
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
-        roots.add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
-        }
-    }
-
-    // ========= VIEW FUNCTIONS =========
+    // ==============================================================================================
+    // ================================= EXTERNAL VIEW FUNCTIONS ===================================
+    // ==============================================================================================
 
     // Implementing view functions required by the interface
     function getOperatorDelegationsCount(
@@ -608,7 +633,9 @@ contract EigenLayerMiddleware is
         return REWARDS_COORDINATOR;
     }
 
-    // ========= INTERNAL FUNCTIONS =========
+    // ==============================================================================================
+    // ================================= INTERNAL FUNCTIONS ========================================
+    // ==============================================================================================
 
     function _registerOperatorToAvs(
         address,
@@ -736,10 +763,6 @@ contract EigenLayerMiddleware is
     function _setClaimerFor(address claimer) internal {
         REWARDS_COORDINATOR.setClaimerFor(claimer);
     }
-
-    /// @notice Authorizes contract upgrades
-    /// @param newImplementation Address of new implementation contract
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 
     function _setRewardsInitiator(address newRewardsInitiator) internal {
         REWARD_INITIATOR = newRewardsInitiator;
