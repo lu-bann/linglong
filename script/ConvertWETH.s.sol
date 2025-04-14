@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
-import { WETH9 } from "./WETH.sol";
+import { WETH9 } from "./lib/WETH.sol";
 import { Script } from "forge-std/Script.sol";
 import { Test, console } from "forge-std/Test.sol";
 
