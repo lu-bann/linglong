@@ -7,7 +7,7 @@
   evm_version = "prague"           # to add BLS precompile
   fuzz = { runs = 1_000 }
   gas_reports = ["*"]
-  optimizer = false
+  optimizer = true
   optimizer_runs = 10_000
   out = "out"
   script = "script"

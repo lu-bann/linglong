@@ -43,10 +43,14 @@ import { BLS } from "@urc/lib/BLS.sol";
 import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
 
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
+
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
 import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 
+import { MiddlewareLib } from "../libs/MiddlewareLib.sol";
 import { SafeCast96To32 } from "../libs/SafeCast96To32.sol";
+import { DelegationStore } from "../storage/DelegationStore.sol";
 
 /// @title EigenLayer Middleware Contract
 /// @notice Manages operator registration, delegation, and restaking in EigenLayer ecosystem
@@ -71,6 +75,7 @@ contract EigenLayerMiddleware is
     using OperatorSubsetLib for uint32;
     using SafeCast96To32 for uint96;
     using SafeCast96To32 for uint32;
+    using MiddlewareLib for DelegationStore;
 
     // ==============================================================================================
     // ================================= STATE VARIABLES ============================================
@@ -281,31 +286,19 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        REGISTRY.optInToSlasher(registrationRoot, SLASHER, address(this));
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
-        roots.add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
-        }
+        MiddlewareLib.optInToSlasher(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            registrationRoot,
+            SLASHER,
+            address(this),
+            registrations,
+            delegationSignatures,
+            delegateePubKey,
+            delegateeAddress,
+            data
+        );
     }
 
     /// @notice Processes a reward claim from the rewards merkle tree
@@ -484,15 +477,9 @@ contract EigenLayerMiddleware is
         view
         returns (bytes32[] memory)
     {
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
-        uint256 length = roots.length();
-        bytes32[] memory result = new bytes32[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            result[i] = roots.at(i);
-        }
-
-        return result;
+        return MiddlewareLib.getOperatorRegistrationRoots(
+            operatorRegistrationRoots[operator]
+        );
     }
 
     /// @notice Gets an operator's restaked strategies and their stake amounts
@@ -610,31 +597,12 @@ contract EigenLayerMiddleware is
             ISlasher.SignedDelegation[] memory delegations
         )
     {
-        (address owner,,, uint32 registeredAt,,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-        uint256 count = delegationStore.delegationMap.length();
-
-        pubkeys = new BLS.G1Point[](count);
-        delegations = new ISlasher.SignedDelegation[](count);
-
-        for (uint256 i = 0; i < count; i++) {
-            bytes32 pubkeyHash = delegationStore.delegationMap.get(i);
-            ISlasher.SignedDelegation memory delegation =
-                delegationStore.delegations[pubkeyHash];
-            pubkeys[i] = delegation.delegation.proposer;
-            delegations[i] = delegation;
-        }
+        return MiddlewareLib.getAllDelegations(
+            REGISTRY,
+            operatorDelegations[operator][registrationRoot],
+            operator,
+            registrationRoot
+        );
     }
 
     /// @notice Gets the total number of operator sets
@@ -671,20 +639,6 @@ contract EigenLayerMiddleware is
     // ================================= INTERNAL FUNCTIONS ========================================
     // ==============================================================================================
 
-    /// @notice Deprecated internal function for registering operators
-    /// @dev Always reverts with instruction to use allocation manager
-    function _registerOperatorToAvs(
-        address,
-        bytes memory,
-        bytes memory
-    )
-        internal
-        pure
-        returns (uint32)
-    {
-        revert UseAllocationManagerForOperatorRegistration();
-    }
-
     /// @notice Internal implementation for batch setting delegations
     /// @param registrationRoot The registration root
     /// @param pubkeys BLS public keys of validators
@@ -698,44 +652,14 @@ contract EigenLayerMiddleware is
         internal
         onlyValidatorOperatorSet
     {
-        (address owner,,, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
-            REGISTRY.registrations(registrationRoot);
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != msg.sender) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        if (slashedAt != 0) {
-            revert OperatorSlashed();
-        }
-
-        if (unregisteredAt < block.number) {
-            revert OperatorUnregistered();
-        }
-
-        if (registeredAt + REGISTRY.FRAUD_PROOF_WINDOW() > block.number) {
-            revert OperatorFraudProofPeriodNotOver();
-        }
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-        require(pubkeys.length == delegations.length, "Array length mismatch");
-        require(
-            delegationStore.delegationMap.length() == pubkeys.length,
-            "Array length mismatch"
+        MiddlewareLib.batchSetDelegations(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            registrationRoot,
+            msg.sender,
+            pubkeys,
+            delegations
         );
-
-        for (uint256 i = 0; i < pubkeys.length; i++) {
-            bytes32 pubkeyHash = keccak256(abi.encode(pubkeys[i]));
-
-            (, bytes32 storedHash) = delegationStore.delegationMap.at(i);
-            if (storedHash == pubkeyHash) {
-                delegationStore.delegations[pubkeyHash] = delegations[i];
-            }
-        }
     }
 
     /// @notice Internal implementation for registering validators
@@ -823,6 +747,12 @@ contract EigenLayerMiddleware is
 
         // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
         // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
+        IAllocationManager(ALLOCATION_MANAGER).addStrategiesToOperatorSet(
+            address(this), operatorSetId, strategies
+        );
+
+        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
+        // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
     }
 
     /// @notice Internal function to remove strategies from an operator set
@@ -841,33 +771,12 @@ contract EigenLayerMiddleware is
 
         // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
         // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-    }
+        IAllocationManager(ALLOCATION_MANAGER).removeStrategiesFromOperatorSet(
+            address(this), operatorSetId, strategies
+        );
 
-    /// @notice Deprecated internal function for creating AVS rewards submission
-    /// @dev Always reverts with instruction to use operator directed rewards
-    function _createAVSRewardsSubmission(
-        uint32,
-        address[] memory,
-        uint256[] memory
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        revert UseCreateOperatorDirectedAVSRewardsSubmission();
-    }
-
-    /// @notice Internal function to set the claimer for rewards
-    /// @param claimer Address of the claimer
-    /// @dev Calls rewards coordinator to set the claimer
-    function _setClaimerFor(address claimer) internal {
-        REWARDS_COORDINATOR.setClaimerFor(claimer);
-    }
-
-    /// @notice Internal function to set the rewards initiator
-    /// @param newRewardsInitiator Address of the new rewards initiator
-    function _setRewardsInitiator(address newRewardsInitiator) internal {
-        REWARD_INITIATOR = newRewardsInitiator;
+        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
+        // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
     }
 
     /// @notice Internal function to process a rewards claim
@@ -888,5 +797,18 @@ contract EigenLayerMiddleware is
     /// @dev Calls AVS directory to update the metadata URI
     function _updateAVSMetadataURI(string calldata metadataURI) internal {
         AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
+    }
+
+    /// @notice Internal function to set the claimer for rewards
+    /// @param claimer Address of the claimer
+    /// @dev Calls rewards coordinator to set the claimer
+    function _setClaimerFor(address claimer) internal {
+        REWARDS_COORDINATOR.setClaimerFor(claimer);
+    }
+
+    /// @notice Internal function to set the rewards initiator
+    /// @param newRewardsInitiator Address of the new rewards initiator
+    function _setRewardsInitiator(address newRewardsInitiator) internal {
+        REWARD_INITIATOR = newRewardsInitiator;
     }
 }

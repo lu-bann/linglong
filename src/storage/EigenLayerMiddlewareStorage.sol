@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
+import { DelegationStore } from "./DelegationStore.sol";
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 import { DelegationManager } from

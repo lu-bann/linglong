@@ -46,10 +46,11 @@ import { BLS } from "@urc/lib/BLS.sol";
 
 import { ISymbioticNetworkMiddleware } from
     "../interfaces/ISymbioticNetworkMiddleware.sol";
-import { ISymbioticRewardsHandler } from "../interfaces/ISymbioticRewardsHandler.sol";
 
+import { MiddlewareLib } from "../libs/MiddlewareLib.sol";
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { SafeCast96To32 } from "../libs/SafeCast96To32.sol";
+import { DelegationStore } from "../storage/DelegationStore.sol";
 import { SymbioticNetworkStorage } from "../storage/SymbioticNetworkStorage.sol";
 import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
 
@@ -63,10 +64,9 @@ contract SymbioticNetworkMiddleware is
     OzAccessManaged,
     Operators,
     Subnetworks,
-    ISymbioticNetworkMiddleware,
-    SymbioticNetworkStorage
+    SymbioticNetworkStorage,
+    ISymbioticNetworkMiddleware
 {
-    using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSetLib for EnumerableSetLib.Uint256Set;
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
@@ -74,8 +74,8 @@ contract SymbioticNetworkMiddleware is
     using Subnetwork for bytes32;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
     using OperatorSubsetLib for uint96;
-    using SafeCast96To32 for uint96;
     using SafeCast96To32 for uint96[];
+    using MiddlewareLib for DelegationStore;
 
     modifier onlyValidatorSubnetwork() {
         if (
@@ -104,6 +104,7 @@ contract SymbioticNetworkMiddleware is
     /// @param owner The address of the contract owner
     /// @param _registryCoordinator The address of the registry coordinator
     /// @param _epochDuration The duration of the epoch
+    /// @param _registry The address of the URC Registry
     /// @param _registry The address of the URC Registry
     /// @dev Calls BaseMiddleware.init and Subnetworks.registerSubnetwork
     function initialize(
@@ -134,8 +135,13 @@ contract SymbioticNetworkMiddleware is
 
         REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
         REGISTRY = Registry(_registry);
+        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
+        REGISTRY = Registry(_registry);
     }
 
+    /// @notice Initializes the default subnetworks for the Symbiotic Network
+    /// @dev Creates both validator and underwriter subnetworks and registers them with the registry coordinator
+    /// @dev Sets the initial SUBNETWORK_COUNT to 2 after creating the default subnetworks
     function initializeSubnetworks() external checkAccess {
         super.registerSubnetwork(VALIDATOR_SUBNETWORK);
         uint96 encodedValidatorSubnetworkId = VALIDATOR_SUBNETWORK.encodeOperatorSetId96(
@@ -155,13 +161,6 @@ contract SymbioticNetworkMiddleware is
         );
         REGISTRY_COORDINATOR.createSubnetwork(encodedSubnetworkId);
         SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
-    }
-
-    /// @notice Set the rewards handler contract
-    /// @param _rewardsHandler Address of the rewards handler contract
-    function setRewardsHandler(address _rewardsHandler) external checkAccess {
-        rewardsHandler = _rewardsHandler;
-        emit RewardsHandlerSet(_rewardsHandler);
     }
 
     function getSubnetworkCount() external view returns (uint96) {
@@ -291,42 +290,14 @@ contract SymbioticNetworkMiddleware is
         override
         onlyValidatorSubnetwork
     {
-        address operator = msg.sender;
-        (address owner,,, uint32 registeredAt, uint32 unregisteredAt,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        if (unregisteredAt < block.number) {
-            revert OperatorUnregistered();
-        }
-
-        if (registeredAt + REGISTRY.FRAUD_PROOF_WINDOW() > block.number) {
-            revert OperatorFraudProofPeriodNotOver();
-        }
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-        require(pubkeys.length == delegations.length, "Array length mismatch");
-        require(
-            delegationStore.delegationMap.length() == pubkeys.length,
-            "Array length mismatch"
+        MiddlewareLib.batchSetDelegations(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            registrationRoot,
+            msg.sender,
+            pubkeys,
+            delegations
         );
-
-        for (uint256 i = 0; i < pubkeys.length; i++) {
-            bytes32 pubkeyHash = keccak256(abi.encode(pubkeys[i]));
-
-            (, bytes32 storedHash) = delegationStore.delegationMap.at(i);
-            if (storedHash == pubkeyHash) {
-                delegationStore.delegations[pubkeyHash] = delegations[i];
-            }
-        }
     }
 
     /// @notice Opt in to slasher contract
@@ -342,31 +313,19 @@ contract SymbioticNetworkMiddleware is
         external
         override
     {
-        REGISTRY.optInToSlasher(registrationRoot, address(this), address(this));
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
-        roots.add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash); // Use index as value for enumeration
-        }
+        MiddlewareLib.optInToSlasher(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            registrationRoot,
+            address(this),
+            address(this),
+            registrations,
+            delegationSignatures,
+            delegateePubKey,
+            delegateeAddress,
+            data
+        );
     }
 
     /// @notice Slash an operator based on the provided slash parameters
@@ -428,15 +387,9 @@ contract SymbioticNetworkMiddleware is
         override
         returns (bytes32[] memory)
     {
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
-        uint256 length = roots.length();
-        bytes32[] memory result = new bytes32[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            result[i] = roots.at(i);
-        }
-
-        return result;
+        return MiddlewareLib.getOperatorRegistrationRoots(
+            operatorRegistrationRoots[operator]
+        );
     }
 
     /// @inheritdoc ISymbioticNetworkMiddleware
@@ -452,31 +405,12 @@ contract SymbioticNetworkMiddleware is
             ISlasher.SignedDelegation[] memory delegations
         )
     {
-        (address owner,,, uint32 registeredAt,,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-        uint256 count = delegationStore.delegationMap.length();
-
-        pubkeys = new BLS.G1Point[](count);
-        delegations = new ISlasher.SignedDelegation[](count);
-
-        for (uint256 i = 0; i < count; i++) {
-            bytes32 pubkeyHash = delegationStore.delegationMap.get(i);
-            ISlasher.SignedDelegation memory delegation =
-                delegationStore.delegations[pubkeyHash];
-            pubkeys[i] = delegation.delegation.proposer;
-            delegations[i] = delegation;
-        }
+        return MiddlewareLib.getAllDelegations(
+            REGISTRY,
+            operatorDelegations[operator][registrationRoot],
+            operator,
+            registrationRoot
+        );
     }
 
     /// @notice Gets the registry coordinator
@@ -524,7 +458,6 @@ contract SymbioticNetworkMiddleware is
         pure
     {
         address keyAddress = abi.decode(key, (address));
-
         if (keyAddress != operator) {
             revert InvalidSignature();
         }

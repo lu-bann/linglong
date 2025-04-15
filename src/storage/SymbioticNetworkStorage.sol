@@ -2,6 +2,8 @@
 pragma solidity ^0.8.25;
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
+
+import { DelegationStore } from "./DelegationStore.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
@@ -24,9 +26,6 @@ abstract contract SymbioticNetworkStorage {
     /// @notice Keep track of registration roots for each operator
     mapping(address => EnumerableSet.Bytes32Set) internal operatorRegistrationRoots;
 
-    /// @notice Reference to the rewards handler contract for Symbiotic
-    address public rewardsHandler;
-
     /// @notice Registry coordinator contract reference
     ITaiyiRegistryCoordinator public REGISTRY_COORDINATOR;
 
@@ -38,10 +37,4 @@ abstract contract SymbioticNetworkStorage {
 
     /// @notice Total count of subnetworks
     uint96 public SUBNETWORK_COUNT;
-
-    /// @notice Similar to EigenLayerMiddleware but for Symbiotic's delegations
-    struct DelegationStore {
-        mapping(bytes32 => ISlasher.SignedDelegation) delegations;
-        EnumerableMapLib.Uint256ToBytes32Map delegationMap;
-    }
 }
