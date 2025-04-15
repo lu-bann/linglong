@@ -2,6 +2,8 @@
 pragma solidity ^0.8.27;
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
+
+import { DelegationStore } from "../storage/DelegationStore.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IRewardsCoordinator } from
@@ -47,14 +49,6 @@ interface IEigenLayerMiddleware {
     error OperatorFraudProofPeriodNotOver();
 
     // ========= STRUCTS =========
-
-    /// @notice Storage for delegation information
-    struct DelegationStore {
-        // index -> hashed pubkey
-        EnumerableMapLib.Uint256ToBytes32Map delegationMap;
-        // hashed pubkey -> signed delegation
-        mapping(bytes32 => ISlasher.SignedDelegation) delegations;
-    }
 
     /// @notice Delegation info struct
     struct DelegationInfo {
