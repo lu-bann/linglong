@@ -5,7 +5,9 @@ import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
 import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { ServiceTypeLib } from "../libs/ServiceTypeLib.sol";
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
+
+import { RestakingProtocolMap } from "../libs/RestakingProtocolMap.sol";
 import {
     IAllocationManager,
     IAllocationManagerTypes
@@ -27,7 +29,7 @@ import { EnumerableSet } from
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | allocationManager    | contract IAllocationManager                                          | 3    | 0      | 20    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
-// | _operatorSets        | mapping(uint32 => struct EnumerableSet.AddressSet)                   | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
+// | _operatorSets        | struct OperatorSubsetLib.OperatorSets                                | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorInfo        | mapping(address => struct ITaiyiRegistryCoordinator.OperatorInfo)    | 5    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
@@ -43,6 +45,7 @@ import { EnumerableSet } from
 /// @title Storage contract for the RegistryCoordinator
 abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using RestakingProtocolMap for RestakingProtocolMap.Map;
 
     /// @notice The EIP-712 typehash used for registering BLS public keys
     bytes32 public constant PUBKEY_REGISTRATION_TYPEHASH =
@@ -64,20 +67,23 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     /// @notice the AllocationManager that tracks OperatorSets and Slashing in EigenLayer
     IAllocationManager public allocationManager;
 
-    /// @notice maps operator set id => operator addresses
-    mapping(uint32 => EnumerableSet.AddressSet) internal _operatorSets;
+    /// @notice operator sets with protocol type information
+    OperatorSubsetLib.OperatorSets internal _operatorSets;
 
     /// @notice maps operator address => operator id and status
     mapping(address => OperatorInfo) internal _operatorInfo;
 
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
-    address public eigenlayerMiddleware;
+    address public eigenLayerMiddleware;
+
+    /// @notice The symbiotic middleware address for this AVS
+    address public symbioticMiddleware;
+
+    /// @notice Map middleware addresses to their protocol type
+    RestakingProtocolMap.Map internal restakingProtocolMap;
 
     /// @notice The restaking middleware addresses
     EnumerableSet.AddressSet internal restakingMiddleware;
-
-    /// @notice The restaking protocol for each restaking middleware
-    mapping(address => RestakingProtocol) internal restakingProtocol;
 
     constructor(IAllocationManager _allocationManager) {
         allocationManager = _allocationManager;

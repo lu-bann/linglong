@@ -19,8 +19,12 @@ import { EnumerableSet } from "@openzeppelin/contracts/utils/structs/EnumerableS
 
 import { ILinglongChallenger } from "../interfaces/ILinglongChallenger.sol";
 import { ILinglongSlasher } from "../interfaces/ILinglongSlasher.sol";
+
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { ITaiyiInteractiveChallenger } from
     "../interfaces/ITaiyiInteractiveChallenger.sol";
+import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 import { LinglongSlasherStorage } from "../storage/LinglongSlasherStorage.sol";
 
 /// @title LinglongSlasher
@@ -194,6 +198,59 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         revert MethodNotSupported();
     }
 
+    /// @dev Helper function to find middleware for an operator
+    /// @param operator The operator address to look up
+    /// @return middleware The middleware address if found. Returns 0 if not found
+    function _findMiddleware(address operator)
+        internal
+        view
+        returns (address middleware)
+    {
+        ITaiyiRegistryCoordinator.AllocatedOperatorSets memory operatorSets =
+        ITaiyiRegistryCoordinator(TAIYI_REGISTRY_COORDINATOR)
+            .getOperatorAllocatedOperatorSets(operator);
+
+        if (operatorSets.eigenLayerSets.length > 0) {
+            return EIGENLAYER_MIDDLEWARE;
+        }
+
+        if (operatorSets.symbioticSets.length > 0) {
+            return SYMBIOTIC_MIDDLEWARE;
+        }
+
+        return address(0);
+    }
+
+    /// @dev Helper function to execute slashing based on protocol
+    /// @param operator The operator to slash
+    /// @param middleware The middleware address
+    /// @param challengerContract The challenger contract address
+    /// @param payload The commitment payload
+    /// @param violationType The violation type
+    /// @param protocol The protocol type
+    /// @return shouldExecuteSlashing Whether slashing should be executed
+    function _executeSlashingByProtocol(
+        address operator,
+        address middleware,
+        address challengerContract,
+        bytes memory payload,
+        bytes32 violationType,
+        ITaiyiRegistryCoordinator.RestakingProtocol protocol
+    )
+        internal
+        returns (bool shouldExecuteSlashing)
+    {
+        if (protocol == ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC) {
+            return _verifyProofAndInitiateSymbioticSlashing(
+                operator, middleware, challengerContract, payload, violationType
+            );
+        } else {
+            return _verifyProofAndInitiateEigenLayerSlashing(
+                operator, middleware, challengerContract, payload, violationType
+            );
+        }
+    }
+
     /// @inheritdoc ISlasher
     /// @notice Slash an operator for a given commitment
     /// @dev The URC Registry will call this function to slash a registered operator if supplied with a valid commitment and evidence
@@ -223,9 +280,25 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         // Extract operator from commitment
         address operator = _extractOperatorFromCommitment(commitment);
 
-        // Verify proof and get slashing status
-        bool shouldExecuteSlashing = _verifyProofAndInitiateSlashing(
-            operator, challengerContract, commitment.payload, violationType
+        // Find the middleware address for this operator
+        address middleware = _findMiddleware(operator);
+        if (middleware == address(0)) {
+            revert OperatorNotInSet(operator, 0);
+        }
+
+        // Check which protocol the middleware belongs to
+        ITaiyiRegistryCoordinator.RestakingProtocol protocol = ITaiyiRegistryCoordinator(
+            TAIYI_REGISTRY_COORDINATOR
+        ).getMiddlewareProtocol(middleware);
+
+        // Execute slashing based on protocol
+        bool shouldExecuteSlashing = _executeSlashingByProtocol(
+            operator,
+            middleware,
+            challengerContract,
+            commitment.payload,
+            violationType,
+            protocol
         );
 
         // If direct execution is requested, execute the slashing
@@ -237,7 +310,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         }
 
         // Always return 0 for slashAmountGwei
-        // This is because collateral management is handled by EigenLayer
+        // This is because collateral management is handled by EigenLayer/Symbiotic
         return 0;
     }
 
@@ -255,49 +328,88 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         return challenge.commitmentSigner;
     }
 
-    /// @dev Verify the proof and initiate slashing if needed
-    /// @param operator The operator to slash
+    /// @dev Verify the proof for a challenger contract
     /// @param challengerContract The challenger contract address
-    /// @param payload The commitment payload
-    /// @return shouldExecuteDirectly Whether to execute slashing directly
-    function _verifyProofAndInitiateSlashing(
-        address operator,
+    /// @param payload The payload to verify
+    /// @return status The verification status
+    function _verifyChallenger(
         address challengerContract,
-        bytes memory payload,
-        bytes32 /* violationType */
+        bytes memory payload
     )
         internal
-        returns (bool shouldExecuteDirectly)
+        returns (ILinglongChallenger.VerificationStatus)
     {
         // Decode the original payload for verification
         (bytes memory decodedPayload) = abi.decode(payload, (bytes));
 
         // Verify the proof
+        return ILinglongChallenger(challengerContract).verifyProof(decodedPayload);
+    }
+
+    /// @dev Check if slashing is already in progress
+    /// @param operator The operator address
+    /// @param challengerContract The challenger contract address
+    /// @return notInProgress True if slashing is not already in progress
+    function _checkSlashingNotInProgress(
+        address operator,
+        address challengerContract
+    )
+        internal
+        view
+        returns (bool notInProgress)
+    {
+        uint32 operatorSetId = ILinglongChallenger(challengerContract).getOperatorSetId();
+        bool isInstantSlashing =
+            ILinglongChallenger(challengerContract).isInstantSlashing();
+
+        if (isInstantSlashing) {
+            return true; // For instant slashing, always proceed
+        }
+
+        (bool inProgress,) =
+            this.isSlashingInProgress(operator, operatorSetId, challengerContract);
+
+        return !inProgress;
+    }
+
+    /// @dev Verify the proof and initiate EigenLayer slashing if needed
+    /// @param operator The operator to slash
+    /// @param middleware The middleware address (EigenLayer)
+    /// @param challengerContract The challenger contract address
+    /// @param payload The commitment payload
+    /// @param violationType The type of violation
+    /// @return shouldExecuteDirectly Whether to execute slashing directly
+    function _verifyProofAndInitiateEigenLayerSlashing(
+        address operator,
+        address middleware,
+        address challengerContract,
+        bytes memory payload,
+        bytes32 violationType
+    )
+        internal
+        returns (bool shouldExecuteDirectly)
+    {
+        // First verify the proof
         ILinglongChallenger.VerificationStatus status =
-            ILinglongChallenger(challengerContract).verifyProof(decodedPayload);
+            _verifyChallenger(challengerContract, payload);
 
         if (status != ILinglongChallenger.VerificationStatus.Verified) {
             revert ProofVerificationFailed();
         }
 
-        // Get slashing configuration
-        bool isInstantSlashing =
-            ILinglongChallenger(challengerContract).isInstantSlashing();
-        uint32 operatorSetId = ILinglongChallenger(challengerContract).getOperatorSetId();
-
-        // For veto slashing, check if slashing is already in progress
-        if (!isInstantSlashing) {
-            (bool inProgress,) =
-                this.isSlashingInProgress(operator, operatorSetId, challengerContract);
-            if (inProgress) {
-                // Return without further action if slashing is already in progress
-                return false;
-            }
+        // Check if slashing is already in progress
+        if (!_checkSlashingNotInProgress(operator, challengerContract)) {
+            return false;
         }
 
-        // Prepare slashing parameters
-        IAllocationManagerTypes.SlashingParams memory params = _prepareSlashingParams(
+        // Get operator set ID for preparing params
+        uint32 operatorSetId = ILinglongChallenger(challengerContract).getOperatorSetId();
+
+        // Prepare slashing parameters for EigenLayer
+        IAllocationManagerTypes.SlashingParams memory params =
+        _prepareEigenLayerSlashingParams(
             operator,
+            middleware,
             operatorSetId,
             ILinglongChallenger(challengerContract).getSlashAmount(),
             string(
@@ -314,12 +426,192 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         // Check if direct execution is requested
         shouldExecuteDirectly = abi.decode(returnData, (bool));
         if (shouldExecuteDirectly) {
-            if (!_executeSlashing(address(this), params)) {
+            if (!_executeEigenLayerSlashing(middleware, params)) {
                 revert AllocationManagerCallFailed();
             }
         }
 
         return shouldExecuteDirectly;
+    }
+
+    /// @dev Verify the proof and initiate Symbiotic slashing if needed
+    /// @param operator The operator to slash
+    /// @param middleware The middleware address (Symbiotic)
+    /// @param challengerContract The challenger contract address
+    /// @param payload The commitment payload
+    /// @param violationType The type of violation
+    /// @return shouldExecuteDirectly Whether to execute slashing directly
+    function _verifyProofAndInitiateSymbioticSlashing(
+        address operator,
+        address middleware,
+        address challengerContract,
+        bytes memory payload,
+        bytes32 violationType
+    )
+        internal
+        returns (bool shouldExecuteDirectly)
+    {
+        // First verify the proof
+        ILinglongChallenger.VerificationStatus status =
+            _verifyChallenger(challengerContract, payload);
+
+        if (status != ILinglongChallenger.VerificationStatus.Verified) {
+            revert ProofVerificationFailed();
+        }
+
+        // Check if slashing is already in progress
+        if (!_checkSlashingNotInProgress(operator, challengerContract)) {
+            return false;
+        }
+
+        // Get operator set ID for preparing params
+        uint32 operatorSetId = ILinglongChallenger(challengerContract).getOperatorSetId();
+
+        // Prepare slashing parameters for Symbiotic
+        bytes32 subnetwork = bytes32(uint256(operatorSetId));
+        uint256 slashAmount = ILinglongChallenger(challengerContract).getSlashAmount();
+
+        // For Symbiotic, we call the slash function directly on the middleware
+        (bool success,) = middleware.call(
+            abi.encodeWithSignature(
+                "slash((uint48,bytes,uint256,bytes32,bytes[]))",
+                _prepareSymbioticSlashParams(
+                    operator,
+                    subnetwork,
+                    slashAmount,
+                    string(
+                        abi.encodePacked(
+                            "URC slash: ", challengerImpls[challengerContract].name
+                        )
+                    )
+                )
+            )
+        );
+
+        if (!success) revert SlasherCallFailed();
+
+        // Always execute directly for Symbiotic
+        return true;
+    }
+
+    /// @dev Execute slashing through the allocation manager for EigenLayer
+    /// @param avs The address of the AVS initiating the slash
+    /// @param params The slashing parameters
+    /// @return success Whether the slashing was successful
+    function _executeEigenLayerSlashing(
+        address avs,
+        IAllocationManagerTypes.SlashingParams memory params
+    )
+        internal
+        returns (bool success)
+    {
+        try IAllocationManager(ALLOCATION_MANAGER).slashOperator(avs, params) {
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /// @dev Get allocated strategies for an operator
+    /// @param operator The operator address
+    /// @param middleware The middleware address
+    /// @param operatorSetId The operator set ID
+    /// @return strategies Array of allocated strategies
+    function _getAllocatedStrategies(
+        address operator,
+        address middleware,
+        uint32 operatorSetId
+    )
+        internal
+        view
+        returns (IStrategy[] memory strategies)
+    {
+        OperatorSet memory opSet = OperatorSet({ avs: middleware, id: operatorSetId });
+        return
+            IAllocationManager(ALLOCATION_MANAGER).getAllocatedStrategies(operator, opSet);
+    }
+
+    /// @dev Create wads to slash based on strategies length and amount
+    /// @param strategiesLength The length of the strategies array
+    /// @param slashAmount The amount to slash
+    /// @return wadsToSlash Array of amounts to slash
+    function _createWadsToSlash(
+        uint256 strategiesLength,
+        uint256 slashAmount
+    )
+        internal
+        pure
+        returns (uint256[] memory wadsToSlash)
+    {
+        wadsToSlash = new uint256[](strategiesLength);
+        for (uint256 i = 0; i < strategiesLength; i++) {
+            wadsToSlash[i] = slashAmount;
+        }
+        return wadsToSlash;
+    }
+
+    /// @dev Prepare slashing parameters for EigenLayer
+    /// @param operator The operator to slash
+    /// @param middleware The middleware address
+    /// @param operatorSetId The operator set ID
+    /// @param slashAmount The amount to slash
+    /// @param description Description of the slashing
+    /// @return params The slashing parameters
+    function _prepareEigenLayerSlashingParams(
+        address operator,
+        address middleware,
+        uint32 operatorSetId,
+        uint256 slashAmount,
+        string memory description
+    )
+        internal
+        view
+        returns (IAllocationManagerTypes.SlashingParams memory)
+    {
+        // Get allocated strategies
+        IStrategy[] memory strategies =
+            _getAllocatedStrategies(operator, middleware, operatorSetId);
+
+        // Create wads to slash array
+        uint256[] memory wadsToSlash = _createWadsToSlash(strategies.length, slashAmount);
+
+        // Construct and return the SlashingParams
+        return IAllocationManagerTypes.SlashingParams({
+            operator: operator,
+            operatorSetId: operatorSetId,
+            strategies: strategies,
+            wadsToSlash: wadsToSlash,
+            description: description
+        });
+    }
+
+    /// @dev Prepare slashing parameters for Symbiotic
+    /// @param operator The operator to slash
+    /// @param subnetwork The subnetwork ID
+    /// @param slashAmount The amount to slash
+    /// @param description Description of the slashing
+    /// @return params The slash parameters
+    function _prepareSymbioticSlashParams(
+        address operator,
+        bytes32 subnetwork,
+        uint256 slashAmount,
+        string memory description
+    )
+        internal
+        view
+        returns (ISymbioticNetworkMiddleware.SlashParams memory params)
+    {
+        // Create empty slash hints array
+        bytes[] memory slashHints = new bytes[](0);
+
+        // Return the constructed SlashParams
+        return ISymbioticNetworkMiddleware.SlashParams({
+            timestamp: uint48(block.timestamp),
+            key: abi.encode(operator), // Using operator address as the key
+            amount: slashAmount,
+            subnetwork: subnetwork,
+            slashHints: slashHints
+        });
     }
 
     /// @inheritdoc ILinglongSlasher
@@ -336,62 +628,5 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         return ILinglongChallenger(challengeContract).isSlashingInProgress(
             operator, operatorSetId
         );
-    }
-
-    // ============== INTERNAL FUNCTIONS ===============
-
-    /// @dev Execute slashing through the allocation manager
-    /// @param avs The address of the AVS initiating the slash
-    /// @param params The slashing parameters
-    /// @return success Whether the slashing was successful
-    function _executeSlashing(
-        address avs,
-        IAllocationManagerTypes.SlashingParams memory params
-    )
-        internal
-        returns (bool success)
-    {
-        try IAllocationManager(ALLOCATION_MANAGER).slashOperator(avs, params) {
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
-    /// @dev Prepare slashing parameters for EigenLayer
-    /// @param operator The operator to slash
-    /// @param operatorSetId The operator set ID
-    /// @param slashAmount The amount to slash
-    /// @param description Description of the slashing
-    /// @return params The slashing parameters
-    function _prepareSlashingParams(
-        address operator,
-        uint32 operatorSetId,
-        uint256 slashAmount,
-        string memory description
-    )
-        internal
-        view
-        returns (IAllocationManagerTypes.SlashingParams memory)
-    {
-        // Create operator set structure using proper format for getAllocatedStrategies
-        OperatorSet memory opSet =
-            OperatorSet({ avs: EIGENLAYER_MIDDLEWARE, id: operatorSetId });
-
-        IStrategy[] memory strategies =
-            IAllocationManager(ALLOCATION_MANAGER).getAllocatedStrategies(operator, opSet);
-
-        uint256[] memory wadsToSlash = new uint256[](strategies.length);
-        for (uint256 i = 0; i < strategies.length; i++) {
-            wadsToSlash[i] = slashAmount;
-        }
-
-        return IAllocationManagerTypes.SlashingParams({
-            operator: operator,
-            operatorSetId: operatorSetId,
-            strategies: strategies,
-            wadsToSlash: wadsToSlash,
-            description: description
-        });
     }
 }
