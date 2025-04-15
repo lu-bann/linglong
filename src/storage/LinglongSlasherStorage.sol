@@ -19,6 +19,12 @@ abstract contract LinglongSlasherStorage is ILinglongSlasher {
     /// @notice Address of the EigenLayer middleware contract
     address public EIGENLAYER_MIDDLEWARE;
 
+    /// @notice Address of the Symbiotic middleware contract
+    address public SYMBIOTIC_MIDDLEWARE;
+
+    /// @notice Address of the Taiyi Registry Coordinator contract
+    address public TAIYI_REGISTRY_COORDINATOR;
+
     /// @notice Address of the allocation manager
     address public ALLOCATION_MANAGER;
 

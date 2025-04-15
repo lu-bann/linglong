@@ -15,7 +15,7 @@
 
 [submodule "lib/eigenlayer-contracts"]
 	path = lib/eigenlayer-contracts
-	url = https://github.com/Layr-Labs/eigenlayer-contracts
+	url = https://github.com/Layr-Labs/eigenlayer-contracts/
 	commit = 64c028333856ab2ae603fcde94fc9b24715ef603
 
 [submodule "lib/openzeppelin-contracts-upgradeable"]

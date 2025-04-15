@@ -43,6 +43,8 @@ interface ILinglongSlasher is ISlasher {
     error ViolationTypeAlreadyRegistered();
     error EmptyViolationTypeName();
     error InvalidSlasher();
+    error UnsupportedProtocol(uint8 protocol);
+    error OperatorNotInSet(address operator, uint32 operatorSetId);
 
     /// @notice Emitted when a slashing result is recorded
     /// @param operator The operator being slashed
