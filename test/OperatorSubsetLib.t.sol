@@ -164,7 +164,6 @@ contract OperatorSubsetLibTest is Test {
         );
     }
 
-
     // --- Set Management Tests ---
 
     function testCreateSet() public {
