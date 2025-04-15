@@ -64,8 +64,8 @@ contract SymbioticNetworkMiddleware is
     OzAccessManaged,
     Operators,
     Subnetworks,
-    ISymbioticNetworkMiddleware,
-    SymbioticNetworkStorage
+    SymbioticNetworkStorage,
+    ISymbioticNetworkMiddleware
 {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSetLib for EnumerableSetLib.Uint256Set;
@@ -105,6 +105,7 @@ contract SymbioticNetworkMiddleware is
     /// @param _registryCoordinator The address of the registry coordinator
     /// @param _epochDuration The duration of the epoch
     /// @param _registry The address of the URC Registry
+    /// @param _registry The address of the URC Registry
     /// @dev Calls BaseMiddleware.init and Subnetworks.registerSubnetwork
     function initialize(
         address network,
@@ -132,6 +133,8 @@ contract SymbioticNetworkMiddleware is
         __OzAccessManaged_init(owner);
         __EpochCapture_init(_epochDuration);
 
+        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
+        REGISTRY = Registry(_registry);
         REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
         REGISTRY = Registry(_registry);
     }

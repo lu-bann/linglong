@@ -43,6 +43,8 @@ import { BLS } from "@urc/lib/BLS.sol";
 import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
 
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
+
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
 import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 
@@ -637,20 +639,6 @@ contract EigenLayerMiddleware is
     // ================================= INTERNAL FUNCTIONS ========================================
     // ==============================================================================================
 
-    /// @notice Deprecated internal function for registering operators
-    /// @dev Always reverts with instruction to use allocation manager
-    function _registerOperatorToAvs(
-        address,
-        bytes memory,
-        bytes memory
-    )
-        internal
-        pure
-        returns (uint32)
-    {
-        revert UseAllocationManagerForOperatorRegistration();
-    }
-
     /// @notice Internal implementation for batch setting delegations
     /// @param registrationRoot The registration root
     /// @param pubkeys BLS public keys of validators
@@ -759,6 +747,12 @@ contract EigenLayerMiddleware is
 
         // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
         // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
+        IAllocationManager(ALLOCATION_MANAGER).addStrategiesToOperatorSet(
+            address(this), operatorSetId, strategies
+        );
+
+        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
+        // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
     }
 
     /// @notice Internal function to remove strategies from an operator set
@@ -777,33 +771,12 @@ contract EigenLayerMiddleware is
 
         // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
         // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-    }
+        IAllocationManager(ALLOCATION_MANAGER).removeStrategiesFromOperatorSet(
+            address(this), operatorSetId, strategies
+        );
 
-    /// @notice Deprecated internal function for creating AVS rewards submission
-    /// @dev Always reverts with instruction to use operator directed rewards
-    function _createAVSRewardsSubmission(
-        uint32,
-        address[] memory,
-        uint256[] memory
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        revert UseCreateOperatorDirectedAVSRewardsSubmission();
-    }
-
-    /// @notice Internal function to set the claimer for rewards
-    /// @param claimer Address of the claimer
-    /// @dev Calls rewards coordinator to set the claimer
-    function _setClaimerFor(address claimer) internal {
-        REWARDS_COORDINATOR.setClaimerFor(claimer);
-    }
-
-    /// @notice Internal function to set the rewards initiator
-    /// @param newRewardsInitiator Address of the new rewards initiator
-    function _setRewardsInitiator(address newRewardsInitiator) internal {
-        REWARD_INITIATOR = newRewardsInitiator;
+        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
+        // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
     }
 
     /// @notice Internal function to process a rewards claim
@@ -824,5 +797,18 @@ contract EigenLayerMiddleware is
     /// @dev Calls AVS directory to update the metadata URI
     function _updateAVSMetadataURI(string calldata metadataURI) internal {
         AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
+    }
+
+    /// @notice Internal function to set the claimer for rewards
+    /// @param claimer Address of the claimer
+    /// @dev Calls rewards coordinator to set the claimer
+    function _setClaimerFor(address claimer) internal {
+        REWARDS_COORDINATOR.setClaimerFor(claimer);
+    }
+
+    /// @notice Internal function to set the rewards initiator
+    /// @param newRewardsInitiator Address of the new rewards initiator
+    function _setRewardsInitiator(address newRewardsInitiator) internal {
+        REWARD_INITIATOR = newRewardsInitiator;
     }
 }
