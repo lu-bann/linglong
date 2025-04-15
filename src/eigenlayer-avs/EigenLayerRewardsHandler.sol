@@ -115,8 +115,8 @@ contract EigenLayerRewardsHandler {
         validatorAmount = totalAmount - underwriterAmount;
 
         // Get underwriter operators and total staked amount
-        address[] memory underwriterOperators =
-            middleware.getRegistryCoordinator().getOperatorSetOperators(uint32(0));
+        address[] memory underwriterOperators = middleware.getRegistryCoordinator()
+            .getEigenLayerOperatorSetOperators(uint32(0));
 
         if (underwriterOperators.length == 0) {
             revert NoUnderwriterOperators();
@@ -158,8 +158,8 @@ contract EigenLayerRewardsHandler {
         external
     {
         // Get validator operators for this AVS
-        address[] memory operators =
-            middleware.getRegistryCoordinator().getOperatorSetOperators(uint32(0));
+        address[] memory operators = middleware.getRegistryCoordinator()
+            .getEigenLayerOperatorSetOperators(uint32(0));
 
         if (operators.length == 0) {
             revert NoUnderwriterOperators();

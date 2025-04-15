@@ -363,6 +363,7 @@ contract Deploy is Script, Test {
             "eigenLayerMiddlewareProxyAdminAddress",
             eigenLayerMiddlewareProxyAdminAddress
         );
+
         ///###################################
         TaiyiCore taiyiCoreImpl = new TaiyiCore();
         ProxyAdmin(taiyiCoreProxyAdminAddress).upgradeAndCall(
@@ -389,7 +390,10 @@ contract Deploy is Script, Test {
         taiyiRegistryCoordinator.updatePubkeyRegistry(address(pubkeyRegistry));
 
         linglongSlasher.setEigenLayerMiddleware(address(eigenLayerMiddleware));
-        taiyiRegistryCoordinator.setEigenlayerMiddleware(address(eigenLayerMiddleware));
+        taiyiRegistryCoordinator.setRestakingProtocol(
+            address(eigenLayerMiddleware),
+            ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
 
         vm.stopBroadcast();
     }

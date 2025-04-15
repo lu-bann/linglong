@@ -38,8 +38,8 @@ library EigenLayerMiddlewareLib {
 
         // Count total strategies first
         for (uint256 i = 0; i < operatorSetsLength;) {
-            IStrategy[] memory setStrategies = registryCoordinator
-                .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
+            address[] memory setStrategies = registryCoordinator
+                .getEigenLayerOperatorAllocatedStrategies(operator, operatorSets[i].id);
             totalStrategiesCount += setStrategies.length;
             unchecked {
                 ++i;
@@ -56,12 +56,12 @@ library EigenLayerMiddlewareLib {
 
         // Fill array with all strategies
         for (uint256 i = 0; i < operatorSetsLength;) {
-            IStrategy[] memory setStrategies = registryCoordinator
-                .getOperatorAllocatedStrategies(operator, operatorSets[i].id);
+            address[] memory setStrategies = registryCoordinator
+                .getEigenLayerOperatorAllocatedStrategies(operator, operatorSets[i].id);
             uint256 setStrategiesLength = setStrategies.length;
 
             for (uint256 j = 0; j < setStrategiesLength;) {
-                allStrategies[allStrategiesLength] = address(setStrategies[j]);
+                allStrategies[allStrategiesLength] = setStrategies[j];
                 unchecked {
                     ++allStrategiesLength;
                     ++j;

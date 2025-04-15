@@ -128,7 +128,7 @@ interface IEigenLayerMiddleware {
         view
         returns (IStrategy[] memory strategies, uint256[] memory stakeAmounts);
 
-    function verifyRegistration(address operator)
+    function verifyEigenLayerOperatorRegistration(address operator)
         external
         view
         returns (OperatorSet[] memory);
@@ -137,13 +137,6 @@ interface IEigenLayerMiddleware {
         external
         view
         returns (IStrategy[] memory strategies);
-
-    function getAllRestakeableStrategies() external view returns (address[] memory);
-
-    function getRestakeableOperatorSetStrategies(uint32 operatorSetId)
-        external
-        view
-        returns (IStrategy[] memory);
 
     function getDelegation(
         address operator,
