@@ -43,6 +43,8 @@ import { EigenlayerDeployer } from "./utils/EigenlayerDeployer.sol";
 import { MockLinglongChallenger } from "./utils/MockChallenger.sol";
 import { ILinglongChallenger } from "src/interfaces/ILinglongChallenger.sol";
 import { IPubkeyRegistry } from "src/interfaces/IPubkeyRegistry.sol";
+
+import { ITaiyiRegistryCoordinator } from "src/interfaces/ITaiyiRegistryCoordinator.sol";
 import { PubkeyRegistry } from "src/operator-registries/PubkeyRegistry.sol";
 import { SocketRegistry } from "src/operator-registries/SocketRegistry.sol";
 import { TaiyiRegistryCoordinator } from
@@ -60,8 +62,11 @@ import { Registry } from "@urc/Registry.sol";
 
 import { TransparentUpgradeableProxy } from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { OperatorSubsetLib } from "src/libs/OperatorSubsetLib.sol";
 
 contract EigenlayerMiddlewareTest is Test {
+    using OperatorSubsetLib for uint32;
+
     bytes32 public constant VIOLATION_TYPE_URC = keccak256("URC_VIOLATION");
     uint64 public constant COMMITMENT_TYPE_URC = 1;
 
@@ -364,8 +369,9 @@ contract EigenlayerMiddlewareTest is Test {
         );
 
         // 2. Verify they are members of the operatorSet
+        (, uint32 opSetId) = operatorSetId.decodeOperatorSetId32();
         address[] memory opSetMembers =
-            registryCoordinator.getOperatorSetOperators(operatorSetId);
+            registryCoordinator.getEigenLayerOperatorSetOperators(opSetId);
 
         bool primaryOpFound = false;
         bool underwriterOpFound = false;
@@ -484,7 +490,9 @@ contract EigenlayerMiddlewareTest is Test {
         // Set up connections as owner
         vm.startPrank(owner);
         slasher.setEigenLayerMiddleware(eigenLayerMiddleware);
-        registryCoordinator.setEigenlayerMiddleware(eigenLayerMiddleware);
+        registryCoordinator.setRestakingProtocol(
+            eigenLayerMiddleware, ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
         vm.stopPrank();
 
         // Set AVS registrar for AllocationManager
@@ -514,12 +522,22 @@ contract EigenlayerMiddlewareTest is Test {
         IStrategy[] memory strategies = new IStrategy[](1);
         strategies[0] = IStrategy(eigenLayerDeployer.wethStrat());
 
+        console.log("Creating operator set with strategy:", address(strategies[0]));
+
         // Create the operator set directly through middleware
-        vm.startPrank(owner); // Owner must call as createOperatorSet is onlyOwner
+        vm.startPrank(owner);
         operatorSetId = middleware.createOperatorSet(strategies);
         vm.stopPrank();
 
-        console.log("operatorSetId", operatorSetId);
+        console.log("Created operator set with ID:", operatorSetId);
+
+        // Verify the operator set exists
+        OperatorSet memory opSet;
+        opSet.id = operatorSetId;
+        opSet.avs = eigenLayerMiddleware;
+
+        bool exists = eigenLayerDeployer.allocationManager().isOperatorSet(opSet);
+        console.log("Operator set exists:", exists);
     }
 
     // Full EigenLayer and AVS registration flow
