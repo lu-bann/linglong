@@ -26,12 +26,11 @@ jobs:
       - name: Run Forge build
         run: |
           forge --version
+          forge build --sizes
         id: build
-      
       - name: Run Forge tests
         run: |
           forge test -vvvv
-
         id: test
       
       - name: Check code formatting

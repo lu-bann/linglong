@@ -14,42 +14,32 @@ import { IERC20 } from "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol
 import { Math } from "@openzeppelin-contracts/contracts/utils/math/Math.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
-import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 import { IBaseDelegator } from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 
 import { Subnetworks } from "@symbiotic-middleware-sdk/extensions/Subnetworks.sol";
 
-import { OzAccessManaged } from
-    "@symbiotic-middleware-sdk/extensions/managers/access/OzAccessManaged.sol";
 import { EpochCapture } from
     "@symbiotic-middleware-sdk/extensions/managers/capture-timestamps/EpochCapture.sol";
 import { KeyManagerAddress } from
     "@symbiotic-middleware-sdk/extensions/managers/keys/KeyManagerAddress.sol";
-import { EqualStakePower } from
-    "@symbiotic-middleware-sdk/extensions/managers/stake-powers/EqualStakePower.sol";
-import { Operators } from "@symbiotic-middleware-sdk/extensions/operators/Operators.sol";
-
-import { SelfRegisterOperators } from
-    "@symbiotic-middleware-sdk/extensions/operators/SelfRegisterOperators.sol";
+import { BaseMiddleware } from "@symbiotic-middleware-sdk/middleware/BaseMiddleware.sol";
 import { Subnetwork } from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
-import { INetworkRegistry } from "@symbiotic/interfaces/INetworkRegistry.sol";
 import { IVault } from "@symbiotic/interfaces/vault/IVault.sol";
 
-// Add Registry imports for validator registration
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
-import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
 import { ISymbioticNetworkMiddleware } from
     "../interfaces/ISymbioticNetworkMiddleware.sol";
 
-import { MiddlewareLib } from "../libs/MiddlewareLib.sol";
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
-import { SafeCast96To32 } from "../libs/SafeCast96To32.sol";
+import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
+import { SlashingLib } from "../libs/SlashingLib.sol";
+import { SymbioticNetworkMiddlewareLib } from "../libs/SymbioticNetworkMiddlewareLib.sol";
 import { DelegationStore } from "../storage/DelegationStore.sol";
 import { SymbioticNetworkStorage } from "../storage/SymbioticNetworkStorage.sol";
 import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
@@ -60,22 +50,22 @@ import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
 contract SymbioticNetworkMiddleware is
     KeyManagerAddress,
     EpochCapture,
-    EqualStakePower,
-    OzAccessManaged,
-    Operators,
-    Subnetworks,
-    SymbioticNetworkStorage,
-    ISymbioticNetworkMiddleware
+    BaseMiddleware,
+    ISymbioticNetworkMiddleware,
+    SymbioticNetworkStorage
 {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableSetLib for EnumerableSetLib.Uint256Set;
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
     using Subnetwork for address;
     using Subnetwork for bytes32;
-    using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
     using OperatorSubsetLib for uint96;
-    using SafeCast96To32 for uint96[];
-    using MiddlewareLib for DelegationStore;
+    using SafeCast96To32Lib for uint96[];
+    using SlashingLib for DelegationStore;
+
+    // ==============================================================================================
+    // ================================= MODIFIERS =================================================
+    // ==============================================================================================
 
     modifier onlyValidatorSubnetwork() {
         if (
@@ -83,10 +73,16 @@ contract SymbioticNetworkMiddleware is
                 VALIDATOR_SUBNETWORK, msg.sender
             )
         ) {
-            revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
+            revert
+                SymbioticNetworkMiddlewareLib
+                .OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
         _;
     }
+
+    // ==============================================================================================
+    // ================================= CONSTRUCTOR & INITIALIZER =================================
+    // ==============================================================================================
 
     /// @notice Disables initializers for the implementation contract
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -101,10 +97,9 @@ contract SymbioticNetworkMiddleware is
     /// @param operatorRegistry The address of the operator registry
     /// @param operatorNetOptIn The address of the operator network opt-in service
     /// @param reader The address of the reader contract used for delegatecall
-    /// @param owner The address of the contract owner
+    /// @param _owner The address of the contract owner
     /// @param _registryCoordinator The address of the registry coordinator
     /// @param _epochDuration The duration of the epoch
-    /// @param _registry The address of the URC Registry
     /// @param _registry The address of the URC Registry
     /// @dev Calls BaseMiddleware.init and Subnetworks.registerSubnetwork
     function initialize(
@@ -114,7 +109,7 @@ contract SymbioticNetworkMiddleware is
         address operatorRegistry,
         address operatorNetOptIn,
         address reader,
-        address owner,
+        address _owner,
         address _registryCoordinator,
         uint48 _epochDuration,
         address _registry
@@ -130,49 +125,35 @@ contract SymbioticNetworkMiddleware is
             operatorNetOptIn,
             reader
         );
-        __OzAccessManaged_init(owner);
         __EpochCapture_init(_epochDuration);
 
+        owner = _owner;
         REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
-        REGISTRY = Registry(_registry);
-        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
-        REGISTRY = Registry(_registry);
+        REGISTRY = _registry;
     }
 
-    /// @notice Initializes the default subnetworks for the Symbiotic Network
-    /// @dev Creates both validator and underwriter subnetworks and registers them with the registry coordinator
-    /// @dev Sets the initial SUBNETWORK_COUNT to 2 after creating the default subnetworks
-    function initializeSubnetworks() external checkAccess {
-        super.registerSubnetwork(VALIDATOR_SUBNETWORK);
-        uint96 encodedValidatorSubnetworkId = VALIDATOR_SUBNETWORK.encodeOperatorSetId96(
-            ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
-        );
-        REGISTRY_COORDINATOR.createSubnetwork(encodedValidatorSubnetworkId);
-        uint96 encodedUnderwriterSubnetworkId = UNDERWRITER_SUBNETWORK
-            .encodeOperatorSetId96(ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC);
-        REGISTRY_COORDINATOR.createSubnetwork(encodedUnderwriterSubnetworkId);
-        SUBNETWORK_COUNT = 2;
-    }
+    // ==============================================================================================
+    // ================================= EXTERNAL WRITE FUNCTIONS ==================================
+    // ==============================================================================================
 
+    /// @notice Creates a new subnetwork with the given ID
+    /// @param subnetworkId The ID of the subnetwork to create
     function createNewSubnetwork(uint96 subnetworkId) external checkAccess {
         require(subnetworkId > SUBNETWORK_COUNT, "Subnetwork already exists");
         uint96 encodedSubnetworkId = subnetworkId.encodeOperatorSetId96(
             ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
         );
+        super._registerSubnetwork(encodedSubnetworkId);
         REGISTRY_COORDINATOR.createSubnetwork(encodedSubnetworkId);
         SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
     }
 
-    function getSubnetworkCount() external view returns (uint96) {
-        return SUBNETWORK_COUNT;
-    }
-
     /// @notice Register a new operator with the specified key, vault, and base subnetwork
+    /// @dev Calls BaseOperators._registerOperatorImpl
     /// @param key The address key of the operator
     /// @param vault The vault address associated with the operator
     /// @param signature The signature proving ownership of the key
     /// @param baseSubnetworks The base subnetwork identifier (VALIDATOR_SUBNETWORK or UNDERWRITER_SUBNETWORK)
-    /// @dev Calls BaseOperators._registerOperatorImpl
     function registerOperator(
         bytes memory key,
         address vault,
@@ -184,18 +165,18 @@ contract SymbioticNetworkMiddleware is
     {
         require(baseSubnetworks.length > 0, "Invalid subnetwork");
 
-        _verifyKey(msg.sender, key, signature);
-        super._registerOperatorImpl(msg.sender, key, vault);
+        // Use library for key verification with signature
+        SymbioticNetworkMiddlewareLib.verifyKey(msg.sender, key, signature);
 
-        uint96[] memory subnetworkIds = new uint96[](baseSubnetworks.length);
-        for (uint256 i = 0; i < baseSubnetworks.length; i++) {
-            subnetworkIds[i] = baseSubnetworks[i].encodeOperatorSetId96(
-                ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
-            );
+        super._registerOperator(msg.sender);
+        super._updateKey(msg.sender, key);
+        if (vault != address(0)) {
+            super._registerOperatorVault(msg.sender, vault);
         }
 
-        REGISTRY_COORDINATOR.registerOperator(
-            msg.sender, subnetworkIds.toUint32Array(), bytes("")
+        // Register with registry coordinator
+        SymbioticNetworkMiddlewareLib.registerOperatorWithCoordinator(
+            REGISTRY_COORDINATOR, msg.sender, baseSubnetworks
         );
     }
 
@@ -214,31 +195,25 @@ contract SymbioticNetworkMiddleware is
         onlyValidatorSubnetwork
         returns (bytes32 registrationRoot)
     {
-        if (
-            REGISTRY_COORDINATOR.isSymbioticOperatorInSubnetwork(
-                VALIDATOR_SUBNETWORK, msg.sender
-            )
-        ) {
-            revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
-        }
-
-        if (
-            REGISTRY_COORDINATOR.isSymbioticOperatorInSubnetwork(
-                UNDERWRITER_SUBNETWORK, delegateeAddress
-            )
-        ) {
-            revert OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
-        }
-
+        // Validate registrations
         require(
             registrations.length == delegationSignatures.length,
             "Invalid number of delegation signatures"
         );
 
-        // Send 0.11 eth to meet the Registry.MIN_COLLATERAL() requirement
-        // always use avs contract address as the owner of the operator
-        registrationRoot =
-            REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
+        // Check operator registration status
+        SymbioticNetworkMiddlewareLib.validateRegistration(
+            REGISTRY_COORDINATOR,
+            VALIDATOR_SUBNETWORK,
+            UNDERWRITER_SUBNETWORK,
+            msg.sender,
+            delegateeAddress
+        );
+
+        // Register with Registry
+        registrationRoot = IRegistry(REGISTRY).register{ value: 0.11 ether }(
+            registrations, address(this)
+        );
     }
 
     /// @notice Unregister validators for a registration root
@@ -248,33 +223,14 @@ contract SymbioticNetworkMiddleware is
         override
         onlyValidatorSubnetwork
     {
-        // Ensure the registration root is valid for this operator
-        if (
-            registrationRoot == bytes32(0)
-                || operatorDelegations[msg.sender][registrationRoot].delegationMap.length()
-                    == 0
-        ) {
-            revert OperatorNotRegistered();
-        }
-
-        // Get reference to the delegation store
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        // Clear all delegations
-        for (uint256 i = 0; i < delegationStore.delegationMap.length(); i++) {
-            (uint256 index, bytes32 pubkeyHash) = delegationStore.delegationMap.at(i);
-            delete delegationStore.delegations[pubkeyHash];
-            delegationStore.delegationMap.remove(index);
-        }
-
-        // Delete the pubkey hashes array
-        delete operatorDelegations[msg.sender][registrationRoot];
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
-        roots.remove(registrationRoot);
-
-        // Unregister from the registry
-        REGISTRY.unregister(registrationRoot);
+        // Use library to handle unregistration
+        SymbioticNetworkMiddlewareLib.unregisterValidators(
+            IRegistry(REGISTRY),
+            operatorDelegations,
+            operatorRegistrationRoots,
+            msg.sender,
+            registrationRoot
+        );
 
         emit ValidatorUnregistered(msg.sender, registrationRoot);
     }
@@ -290,7 +246,7 @@ contract SymbioticNetworkMiddleware is
         override
         onlyValidatorSubnetwork
     {
-        MiddlewareLib.batchSetDelegations(
+        SlashingLib.batchSetDelegations(
             REGISTRY,
             operatorDelegations[msg.sender][registrationRoot],
             registrationRoot,
@@ -313,8 +269,8 @@ contract SymbioticNetworkMiddleware is
         external
         override
     {
-        MiddlewareLib.optInToSlasher(
-            REGISTRY,
+        SlashingLib.optInToSlasher(
+            IRegistry(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             operatorRegistrationRoots[msg.sender],
             registrationRoot,
@@ -331,37 +287,22 @@ contract SymbioticNetworkMiddleware is
     /// @notice Slash an operator based on the provided slash parameters
     /// @inheritdoc ISymbioticNetworkMiddleware
     function slash(SlashParams calldata params) external override {
-        address operator = _getOperatorAndCheckCanSlash(params.key, params.timestamp);
+        // Get operator from key and validate
+        address operator = _getOperatorFromKey(params.key, params.timestamp);
+
+        // Get active vaults
         address[] memory vaults = super._activeVaultsAt(params.timestamp, operator);
 
-        if (vaults.length == 0) revert NoVaultsToSlash();
-
-        uint256 totalStake;
-        uint256[] memory stakes = new uint256[](vaults.length);
-
-        // Calculate total stake across all vaults
-        for (uint256 i = 0; i < vaults.length; i++) {
-            stakes[i] = IBaseDelegator(IVault(vaults[i]).delegator()).stakeAt(
-                params.subnetwork, operator, params.timestamp, params.slashHints[i]
-            );
-            totalStake += stakes[i];
-        }
-
-        if (totalStake == 0) revert NoVaultsToSlash();
-
-        uint256 remainingAmount = params.amount;
-        uint256[] memory slashAmounts = new uint256[](vaults.length);
-
-        // Calculate proportional amounts using safe math
-        for (uint256 i = 0; i < vaults.length; i++) {
-            slashAmounts[i] = Math.mulDiv(params.amount, stakes[i], totalStake);
-            remainingAmount -= slashAmounts[i];
-        }
-
-        // Distribute remaining amount due to rounding errors
-        if (remainingAmount > 0) {
-            slashAmounts[vaults.length - 1] += remainingAmount;
-        }
+        // Use library for calculating slash amounts
+        (uint256 totalStake, uint256[] memory slashAmounts) =
+        SymbioticNetworkMiddlewareLib.calculateSlashAmounts(
+            vaults,
+            operator,
+            params.subnetwork,
+            params.timestamp,
+            params.amount,
+            params.slashHints
+        );
 
         // Execute slashing with safety checks
         for (uint256 i = 0; i < vaults.length; i++) {
@@ -380,6 +321,16 @@ contract SymbioticNetworkMiddleware is
         emit OperatorSlashed(operator, uint96(uint256(params.subnetwork)), params.amount);
     }
 
+    // ==============================================================================================
+    // ================================= EXTERNAL VIEW FUNCTIONS ===================================
+    // ==============================================================================================
+
+    /// @notice Get the current subnetwork count
+    /// @return Number of subnetworks
+    function getSubnetworkCount() external view returns (uint96) {
+        return SUBNETWORK_COUNT;
+    }
+
     /// @inheritdoc ISymbioticNetworkMiddleware
     function getOperatorRegistrationRoots(address operator)
         external
@@ -387,9 +338,8 @@ contract SymbioticNetworkMiddleware is
         override
         returns (bytes32[] memory)
     {
-        return MiddlewareLib.getOperatorRegistrationRoots(
-            operatorRegistrationRoots[operator]
-        );
+        return
+            SlashingLib.getOperatorRegistrationRoots(operatorRegistrationRoots[operator]);
     }
 
     /// @inheritdoc ISymbioticNetworkMiddleware
@@ -405,7 +355,7 @@ contract SymbioticNetworkMiddleware is
             ISlasher.SignedDelegation[] memory delegations
         )
     {
-        return MiddlewareLib.getAllDelegations(
+        return SlashingLib.getAllDelegations(
             REGISTRY,
             operatorDelegations[operator][registrationRoot],
             operator,
@@ -424,45 +374,6 @@ contract SymbioticNetworkMiddleware is
         return REGISTRY_COORDINATOR;
     }
 
-    /// @notice Gets the operator's address for a given key and verifies they can be slashed
-    /// @param key The address key to look up
-    /// @param timestamp The timestamp to check activity at
-    /// @return operator The operator address associated with the key
-    /// @dev Verifies both the key and operator were active at the given timestamp
-    function _getOperatorAndCheckCanSlash(
-        bytes memory key,
-        uint48 timestamp
-    )
-        internal
-        view
-        returns (address operator)
-    {
-        operator = super.operatorByKey(key);
-        if (!super.keyWasActiveAt(timestamp, key)) revert InactiveKeySlash();
-        if (!super._operatorWasActiveAt(timestamp, operator)) {
-            revert InactiveOperatorSlash();
-        }
-        return operator;
-    }
-
-    /// @notice Internal function to verify operator's address key signature
-    /// @param operator The operator address
-    /// @param key The address key
-    /// @param signature The signature to verify
-    function _verifyKey(
-        address operator,
-        bytes memory key,
-        bytes memory signature
-    )
-        internal
-        pure
-    {
-        address keyAddress = abi.decode(key, (address));
-        if (keyAddress != operator) {
-            revert InvalidSignature();
-        }
-    }
-
     /// @inheritdoc ISymbioticNetworkMiddleware
     function getOperatorCollaterals(
         address operator,
@@ -477,33 +388,21 @@ contract SymbioticNetworkMiddleware is
             uint256[] memory stakedAmounts
         )
     {
-        address[] memory activeVaultAddresses = super._activeOperatorVaults(operator);
-        uint256 length = activeVaultAddresses.length;
+        address[] memory activeOperatorVaults = super._activeOperatorVaults(operator);
 
-        vaults = new address[](length);
-        collateralTokens = new address[](length);
-        stakedAmounts = new uint256[](length);
+        vaults = new address[](activeOperatorVaults.length);
+        collateralTokens = new address[](activeOperatorVaults.length);
+        stakedAmounts = new uint256[](activeOperatorVaults.length);
 
-        for (uint256 i = 0; i < length; i++) {
-            address vault = activeVaultAddresses[i];
+        for (uint256 i = 0; i < activeOperatorVaults.length; i++) {
+            address vault = activeOperatorVaults[i];
             vaults[i] = vault;
             collateralTokens[i] = IVault(vault).collateral();
-
-            uint256 power = super._getOperatorPower(operator, vault, subnetworkId);
-            stakedAmounts[i] = power;
+            // calls the stakeToPower function which returns the stake amount
+            stakedAmounts[i] = super._getOperatorPower(operator, vault, subnetworkId);
         }
 
         return (vaults, collateralTokens, stakedAmounts);
-    }
-
-    /// @inheritdoc ISymbioticNetworkMiddleware
-    function totalPower(address[] memory operators)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        return super._totalPower(operators);
     }
 
     /// @notice Gets all subnetworks that have allocated stake to a specific operator
@@ -514,15 +413,56 @@ contract SymbioticNetworkMiddleware is
         view
         returns (uint96[] memory allocatedSubnetworks)
     {
-        uint96[] memory subnetworks = REGISTRY_COORDINATOR.getSymbioticSubnetworks();
-        for (uint256 i = 0; i < subnetworks.length; i++) {
-            if (
-                REGISTRY_COORDINATOR.isSymbioticOperatorInSubnetwork(
-                    subnetworks[i], operator
-                )
-            ) {
-                allocatedSubnetworks[i] = subnetworks[i];
-            }
+        return SymbioticNetworkMiddlewareLib.getOperatorAllocatedSubnetworks(
+            operator, REGISTRY_COORDINATOR
+        );
+    }
+
+    // ==============================================================================================
+    // ================================= INTERNAL FUNCTIONS ========================================
+    // ==============================================================================================
+
+    /// @notice Helper to get and validate operator from key
+    function _getOperatorFromKey(
+        bytes memory key,
+        uint48 timestamp
+    )
+        internal
+        view
+        returns (address operator)
+    {
+        operator = super.operatorByKey(key);
+        if (!super.keyWasActiveAt(timestamp, key)) {
+            revert SymbioticNetworkMiddlewareLib.InactiveKeySlash();
         }
+        if (!super._operatorWasActiveAt(timestamp, operator)) {
+            revert SymbioticNetworkMiddlewareLib.InactiveOperatorSlash();
+        }
+        return operator;
+    }
+
+    /// @notice Checks if the caller is the owner
+    /// @dev Only the owner can call the function
+    /// @dev This is a custom implementation of the AccessManager._checkAccess function
+    function _checkAccess() internal view virtual override {
+        require(msg.sender == owner, "Unauthorized");
+    }
+
+    /// @notice Converts stake to power
+    /// @dev This is a custom implementation of the StakePowerManager.stakeToPower function
+    /// @dev Indirectly called by the VaultManager._getOperatorPower function
+    /// @param vault The vault address
+    /// @param stake The stake amount
+    /// @return power The calculated power amount
+    function stakeToPower(
+        address vault,
+        uint256 stake
+    )
+        public
+        pure
+        override
+        returns (uint256 power)
+    {
+        return stake;
     }
 }

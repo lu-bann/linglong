@@ -5,10 +5,10 @@ import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinat
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
-/// @title RestakingProtocolMap
+/// @title RestakingProtocolMapLib
 /// @notice Library for managing a mapping from addresses to RestakingProtocol with enumeration capabilities
 /// @dev Combines a mapping with an EnumerableSet to allow for O(1) lookups and enumeration of protocol types
-library RestakingProtocolMap {
+library RestakingProtocolMapLib {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     struct Map {

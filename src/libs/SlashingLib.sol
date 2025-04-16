@@ -10,10 +10,10 @@ import { Registry } from "@urc/Registry.sol";
 import { IRegistry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
-/// @title MiddlewareLib
-/// @notice Shared library for middleware contracts implementing common functionality
+/// @title SlashingLib
+/// @notice Shared library for middleware contracts implementing common slashing and delegation functionality
 /// @dev Contains shared logic for delegation management, registration, and slashing
-library MiddlewareLib {
+library SlashingLib {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
 
@@ -27,14 +27,14 @@ library MiddlewareLib {
     error PubKeyNotFound();
 
     /// @notice Get all delegations for an operator under a registration root
-    /// @param registry The registry contract
+    /// @param registryAddress The registry contract address
     /// @param delegationStore The delegation store
     /// @param operator The operator address
     /// @param registrationRoot The registration root
     /// @return pubkeys Array of BLS public keys
     /// @return delegations Array of signed delegations
     function getAllDelegations(
-        Registry registry,
+        address registryAddress,
         DelegationStore storage delegationStore,
         address operator,
         bytes32 registrationRoot
@@ -47,7 +47,7 @@ library MiddlewareLib {
         )
     {
         (address owner,,, uint32 registeredAt,,) =
-            registry.registrations(registrationRoot);
+            Registry(registryAddress).registrations(registrationRoot);
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
@@ -120,14 +120,14 @@ library MiddlewareLib {
     }
 
     /// @notice Batch set delegations for a registration root
-    /// @param registry The registry contract
+    /// @param registryAddress The registry contract address
     /// @param delegationStore The delegation store
     /// @param registrationRoot The registration root
     /// @param operator The operator address
     /// @param pubkeys BLS public keys
     /// @param delegations Signed delegations
     function batchSetDelegations(
-        Registry registry,
+        address registryAddress,
         DelegationStore storage delegationStore,
         bytes32 registrationRoot,
         address operator,
@@ -137,7 +137,7 @@ library MiddlewareLib {
         public
     {
         (address owner,,, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
-            registry.registrations(registrationRoot);
+            Registry(registryAddress).registrations(registrationRoot);
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
@@ -155,7 +155,8 @@ library MiddlewareLib {
             revert OperatorUnregistered();
         }
 
-        if (registeredAt + registry.FRAUD_PROOF_WINDOW() > block.number) {
+        if (registeredAt + Registry(registryAddress).FRAUD_PROOF_WINDOW() > block.number)
+        {
             revert OperatorFraudProofPeriodNotOver();
         }
 
@@ -176,14 +177,14 @@ library MiddlewareLib {
     }
 
     /// @notice Get a specific delegation by pubkey
-    /// @param registry The registry contract
+    /// @param registryAddress The registry contract address
     /// @param delegationStore The delegation store
     /// @param operator The operator address
     /// @param registrationRoot The registration root
     /// @param pubkey The BLS public key
     /// @return The signed delegation
     function getDelegation(
-        Registry registry,
+        address registryAddress,
         DelegationStore storage delegationStore,
         address operator,
         bytes32 registrationRoot,
@@ -194,7 +195,7 @@ library MiddlewareLib {
         returns (ISlasher.SignedDelegation memory)
     {
         (address owner,,, uint32 registeredAt,,) =
-            registry.registrations(registrationRoot);
+            Registry(registryAddress).registrations(registrationRoot);
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();

@@ -2,13 +2,13 @@
 pragma solidity ^0.8.27;
 
 import "../src/interfaces/ITaiyiRegistryCoordinator.sol";
-import "../src/libs/RestakingProtocolMap.sol";
+import "../src/libs/RestakingProtocolMapLib.sol";
 import "forge-std/Test.sol";
 
-contract RestakingProtocolMapTest is Test {
-    using RestakingProtocolMap for RestakingProtocolMap.Map;
+contract RestakingProtocolMapLibTest is Test {
+    using RestakingProtocolMapLib for RestakingProtocolMapLib.Map;
 
-    RestakingProtocolMap.Map private map;
+    RestakingProtocolMapLib.Map private map;
     address private addr1 = address(0x1);
     address private addr2 = address(0x2);
     address private addr3 = address(0x3);

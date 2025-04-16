@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import "../src/libs/ECDSAHelper.sol";
+import "../src/libs/ECDSALib.sol";
 import "../src/libs/PreconfRequestLib.sol";
 import "../src/types/PreconfRequestATypes.sol";
 import "../src/types/PreconfRequestBTypes.sol";
@@ -9,7 +9,7 @@ import "forge-std/Test.sol";
 
 contract PreconTxTest is Test {
     using PreconfRequestLib for *;
-    using ECDSAHelper for bytes;
+    using ECDSALib for bytes;
 
     address user;
     address owner;

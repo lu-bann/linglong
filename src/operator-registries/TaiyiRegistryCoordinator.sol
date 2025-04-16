@@ -21,7 +21,7 @@ import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
 import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 
 import { BN254 } from "../libs/BN254.sol";
-import { RestakingProtocolMap } from "../libs/RestakingProtocolMap.sol";
+import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
 
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -41,7 +41,7 @@ import { ISymbioticNetworkMiddleware } from
     "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 
-import { SafeCast96To32 } from "../libs/SafeCast96To32.sol";
+import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
 import "forge-std/console.sol";
 
 /// @title A `TaiyiRegistryCoordinator` that has two registries:
@@ -59,13 +59,13 @@ contract TaiyiRegistryCoordinator is
     using BN254 for BN254.G1Point;
     using EnumerableSet for EnumerableSet.AddressSet;
     using OperatorSubsetLib for OperatorSubsetLib.OperatorSets;
-    using RestakingProtocolMap for RestakingProtocolMap.Map;
+    using RestakingProtocolMapLib for RestakingProtocolMapLib.Map;
     using OperatorSubsetLib for uint96;
     using OperatorSubsetLib for uint32;
-    using SafeCast96To32 for uint96;
-    using SafeCast96To32 for uint32;
-    using SafeCast96To32 for uint96[];
-    using SafeCast96To32 for uint32[];
+    using SafeCast96To32Lib for uint96;
+    using SafeCast96To32Lib for uint32;
+    using SafeCast96To32Lib for uint96[];
+    using SafeCast96To32Lib for uint32[];
 
     // ==============================================================================================
     // ================================= MODIFIERS =================================================
