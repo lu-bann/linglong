@@ -34,7 +34,7 @@ import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrat
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
-import { RestakingProtocolMap } from "../libs/RestakingProtocolMap.sol";
+import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
@@ -43,13 +43,11 @@ import { BLS } from "@urc/lib/BLS.sol";
 import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
 
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
-
-import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
 import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 
-import { MiddlewareLib } from "../libs/MiddlewareLib.sol";
-import { SafeCast96To32 } from "../libs/SafeCast96To32.sol";
+import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
+import { SlashingLib } from "../libs/SlashingLib.sol";
 import { DelegationStore } from "../storage/DelegationStore.sol";
 
 /// @title EigenLayer Middleware Contract
@@ -73,9 +71,10 @@ contract EigenLayerMiddleware is
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
     using OperatorSubsetLib for uint96;
     using OperatorSubsetLib for uint32;
-    using SafeCast96To32 for uint96;
-    using SafeCast96To32 for uint32;
-    using MiddlewareLib for DelegationStore;
+    using SafeCast96To32Lib for uint96;
+    using SafeCast96To32Lib for uint32;
+    using SlashingLib for DelegationStore;
+    using EigenLayerMiddlewareLib for ITaiyiRegistryCoordinator;
 
     // ==============================================================================================
     // ================================= STATE VARIABLES ============================================
@@ -106,7 +105,9 @@ contract EigenLayerMiddleware is
         if (
             REGISTRY_COORDINATOR.isEigenLayerOperatorInSet(uint32(0), msg.sender) == false
         ) {
-            revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
+            revert
+                EigenLayerMiddlewareLib
+                .OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
         _;
     }
@@ -115,7 +116,7 @@ contract EigenLayerMiddleware is
     /// @dev Ensures only the trusted registry coordinator can call the function
     modifier onlyRegistryCoordinator() {
         if (msg.sender != address(REGISTRY_COORDINATOR)) {
-            revert OnlyRegistryCoordinator();
+            revert EigenLayerMiddlewareLib.OnlyRegistryCoordinator();
         }
         _;
     }
@@ -124,7 +125,7 @@ contract EigenLayerMiddleware is
     /// @dev Used for controlling who can trigger reward distributions
     modifier onlyRewardsInitiator() {
         if (msg.sender != REWARD_INITIATOR) {
-            revert OnlyRewardsInitiator();
+            revert EigenLayerMiddlewareLib.OnlyRewardsInitiator();
         }
         _;
     }
@@ -228,33 +229,13 @@ contract EigenLayerMiddleware is
     /// @param registrationRoot The registration root to unregister
     /// @dev Removes all delegations and unregisters from the Registry contract
     function unregisterValidators(bytes32 registrationRoot) external {
-        // Ensure the registration root is valid for this operator
-        if (
-            registrationRoot == bytes32(0)
-                || operatorDelegations[msg.sender][registrationRoot].delegationMap.length()
-                    == 0
-        ) {
-            revert OperatorNotRegistered();
-        }
-
-        // Get reference to the delegation store
-        DelegationStore storage delegationStore =
-            operatorDelegations[msg.sender][registrationRoot];
-
-        // Clear all delegations
-        for (uint256 i = 0; i < delegationStore.delegationMap.length(); i++) {
-            (uint256 index, bytes32 pubkeyHash) = delegationStore.delegationMap.at(i);
-            delete delegationStore.delegations[pubkeyHash];
-            delegationStore.delegationMap.remove(index);
-        }
-
-        // Delete the pubkey hashes array
-        delete operatorDelegations[msg.sender][registrationRoot];
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[msg.sender];
-        roots.remove(registrationRoot);
-
-        // Unregister from the registry
-        REGISTRY.unregister(registrationRoot);
+        EigenLayerMiddlewareLib.unregisterValidators(
+            REGISTRY,
+            operatorDelegations,
+            operatorRegistrationRoots,
+            msg.sender,
+            registrationRoot
+        );
     }
 
     /// @notice Creates an operator set with the given strategies
@@ -265,7 +246,9 @@ contract EigenLayerMiddleware is
         onlyOwner
         returns (uint32 operatorSetId)
     {
-        return _createOperatorSet(strategies);
+        return EigenLayerMiddlewareLib.createOperatorSet(
+            ALLOCATION_MANAGER, address(this), REGISTRY_COORDINATOR, strategies
+        );
     }
 
     /// @notice Opts in to the slasher contract for a registration root
@@ -286,7 +269,7 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        MiddlewareLib.optInToSlasher(
+        SlashingLib.optInToSlasher(
             REGISTRY,
             operatorDelegations[msg.sender][registrationRoot],
             operatorRegistrationRoots[msg.sender],
@@ -311,7 +294,7 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        _processClaim(claim, recipient);
+        EigenLayerMiddlewareLib.processClaim(REWARDS_COORDINATOR, claim, recipient);
     }
 
     /// @notice Deprecated function for creating AVS rewards submissions
@@ -320,7 +303,7 @@ contract EigenLayerMiddleware is
         external
         pure
     {
-        revert UseCreateOperatorDirectedAVSRewardsSubmission();
+        revert EigenLayerMiddlewareLib.UseCreateOperatorDirectedAVSRewardsSubmission();
     }
 
     /// @notice Creates operator-directed rewards for validator and underwriter distribution
@@ -337,41 +320,18 @@ contract EigenLayerMiddleware is
             revert RewardsHandlerNotSet();
         }
 
-        require(
-            keccak256(bytes(operatorDirectedRewardsSubmissions[0].description))
-                == keccak256(bytes("underwriter")),
-            "EigenLayerMiddleware: First submission must be the Underwriter portion"
+        // Validate the rewards submissions format
+        bool isValid = EigenLayerMiddlewareLib.validateRewardsSubmissions(
+            operatorDirectedRewardsSubmissions
         );
+        require(isValid, "EigenLayerMiddleware: Invalid rewards submissions format");
 
-        require(
-            keccak256(bytes(operatorDirectedRewardsSubmissions[1].description))
-                == keccak256(bytes("validator")),
-            "EigenLayerMiddleware: Second submission must be the Validator portion"
-        );
-
-        require(
-            operatorDirectedRewardsSubmissions[0].startTimestamp == block.timestamp
-                && operatorDirectedRewardsSubmissions[1].startTimestamp == block.timestamp,
-            "EigenLayerMiddleware: Underwriter and Validator submissions must have start timestamp of current block"
-        );
-
+        // Check reward duration
         require(
             operatorDirectedRewardsSubmissions[0].duration == REWARD_DURATION
                 && operatorDirectedRewardsSubmissions[1].duration == REWARD_DURATION,
             "EigenLayerMiddleware: Underwriter and Validator submissions must have the same duration"
         );
-
-        // Enforce that the second submission's operator rewards are always zero.
-        // The validator portion is determined by _handleUnderwriterSubmission, which
-        // calculates how many tokens go to the validator side.
-        IRewardsCoordinator.OperatorReward[] memory validatorRewards =
-            operatorDirectedRewardsSubmissions[1].operatorRewards;
-        for (uint256 i = 0; i < validatorRewards.length; i++) {
-            require(
-                validatorRewards[i].amount == 0,
-                "EigenLayerMiddleware: Validator submission reward must be zero"
-            );
-        }
 
         // 1) Handle Underwriter portion using the rewards handler
         uint256 validatorAmount = rewardsHandler.handleUnderwriterSubmission(
@@ -414,7 +374,9 @@ contract EigenLayerMiddleware is
         external
         onlyOwner
     {
-        _addStrategiesToOperatorSet(operatorSetId, strategies);
+        EigenLayerMiddlewareLib.addStrategiesToOperatorSet(
+            ALLOCATION_MANAGER, address(this), operatorSetId, strategies
+        );
     }
 
     /// @dev EigenLayer only method
@@ -428,21 +390,23 @@ contract EigenLayerMiddleware is
         external
         onlyOwner
     {
-        _removeStrategiesFromOperatorSet(operatorSetId, strategies);
+        EigenLayerMiddlewareLib.removeStrategiesFromOperatorSet(
+            ALLOCATION_MANAGER, address(this), operatorSetId, strategies
+        );
     }
 
     /// @notice Updates the metadata URI for the AVS in the AVS directory
     /// @param metadataURI New metadata URI
     /// @dev Only callable by the contract owner
     function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
-        _updateAVSMetadataURI(metadataURI);
+        EigenLayerMiddlewareLib.updateAVSMetadataURI(AVS_DIRECTORY, metadataURI);
     }
 
     /// @notice Sets the address authorized to process reward claims
     /// @param claimer Address of the claimer
     /// @dev Only callable by the contract owner
     function setClaimerFor(address claimer) external onlyOwner {
-        _setClaimerFor(claimer);
+        EigenLayerMiddlewareLib.setClaimerFor(REWARDS_COORDINATOR, claimer);
     }
 
     /// @notice Authorizes contract upgrades via UUPS pattern
@@ -477,9 +441,8 @@ contract EigenLayerMiddleware is
         view
         returns (bytes32[] memory)
     {
-        return MiddlewareLib.getOperatorRegistrationRoots(
-            operatorRegistrationRoots[operator]
-        );
+        return
+            SlashingLib.getOperatorRegistrationRoots(operatorRegistrationRoots[operator]);
     }
 
     /// @notice Gets an operator's restaked strategies and their stake amounts
@@ -504,28 +467,9 @@ contract EigenLayerMiddleware is
         view
         returns (OperatorSet[] memory)
     {
-        // First check if operator is registered in delegation manager
-        bool isDelegated = DELEGATION_MANAGER.isOperator(operator);
-        if (!isDelegated) {
-            revert OperatorNotRegisteredInEigenLayer();
-        }
-
-        ITaiyiRegistryCoordinator.AllocatedOperatorSets memory operatorSetsIds =
-            REGISTRY_COORDINATOR.getOperatorAllocatedOperatorSets(operator);
-
-        OperatorSet[] memory operatorSets =
-            new OperatorSet[](operatorSetsIds.eigenLayerSets.length);
-        for (uint256 i = 0; i < operatorSetsIds.eigenLayerSets.length; i++) {
-            operatorSets[i] =
-                OperatorSet({ avs: address(this), id: operatorSetsIds.eigenLayerSets[i] });
-        }
-
-        // Check operator's registration status in this AVS
-        if (operatorSets.length == 0) {
-            revert OperatorNotRegisteredInAVS();
-        }
-
-        return operatorSets;
+        return EigenLayerMiddlewareLib.verifyEigenLayerOperatorRegistration(
+            operator, address(this), DELEGATION_MANAGER, REGISTRY_COORDINATOR
+        );
     }
 
     /// @notice Gets all strategies an operator has restaked in
@@ -558,26 +502,9 @@ contract EigenLayerMiddleware is
         view
         returns (ISlasher.SignedDelegation memory)
     {
-        (address owner,,, uint32 registeredAt,,) =
-            REGISTRY.registrations(registrationRoot);
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        bytes32 pubkeyHash = keccak256(abi.encode(pubkey));
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-
-        if (delegationStore.delegations[pubkeyHash].delegation.committer != address(0)) {
-            return delegationStore.delegations[pubkeyHash];
-        } else {
-            revert PubKeyNotFound();
-        }
+        return EigenLayerMiddlewareLib.getDelegation(
+            REGISTRY, operatorDelegations, operator, registrationRoot, pubkey
+        );
     }
 
     /// @notice Gets all delegations for an operator under a registration root
@@ -590,15 +517,15 @@ contract EigenLayerMiddleware is
         address operator,
         bytes32 registrationRoot
     )
-        public
+        external
         view
         returns (
             BLS.G1Point[] memory pubkeys,
             ISlasher.SignedDelegation[] memory delegations
         )
     {
-        return MiddlewareLib.getAllDelegations(
-            REGISTRY,
+        return SlashingLib.getAllDelegations(
+            address(REGISTRY),
             operatorDelegations[operator][registrationRoot],
             operator,
             registrationRoot
@@ -652,8 +579,8 @@ contract EigenLayerMiddleware is
         internal
         onlyValidatorOperatorSet
     {
-        MiddlewareLib.batchSetDelegations(
-            REGISTRY,
+        SlashingLib.batchSetDelegations(
+            address(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             registrationRoot,
             msg.sender,
@@ -674,136 +601,33 @@ contract EigenLayerMiddleware is
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
-        bytes[] calldata
+        bytes[] calldata data
     )
         internal
         onlyValidatorOperatorSet
         returns (bytes32 registrationRoot)
     {
-        if (
-            REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, delegateeAddress)
-                == address(0)
-        ) {
-            revert OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
-        }
+        // Validate registrations
+        require(registrations.length == delegationSignatures.length, "Mismatched lengths");
 
-        require(
-            registrations.length == delegationSignatures.length,
-            "Invalid number of delegation signatures"
-        );
-
-        // send 0.11 eth to meet the Registry.MIN_COLLATERAL() requirement
-        // always use avs contract address as the owner of the operator
+        // Register with Registry
         registrationRoot =
             REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
-    }
 
-    /// @notice Internal function to create an operator set
-    /// @param strategies Array of strategies for the operator set
-    /// @dev Calls registry coordinator to create the operator set
-    function _createOperatorSet(IStrategy[] memory strategies)
-        internal
-        returns (uint32 operatorSetId)
-    {
-        // Get the current operator set count from allocationManager
-        uint256 currentSetCount =
-            IAllocationManager(ALLOCATION_MANAGER).getOperatorSetCount(address(this));
-
-        operatorSetId = uint32(currentSetCount).encodeOperatorSetId32(
-            ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        // Opt in to slasher
+        SlashingLib.optInToSlasher(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            registrationRoot,
+            SLASHER,
+            address(this),
+            registrations,
+            delegationSignatures,
+            delegateePubKey,
+            delegateeAddress,
+            data
         );
-
-        IAllocationManagerTypes.CreateSetParams[] memory createSetParams =
-            new IAllocationManagerTypes.CreateSetParams[](1);
-
-        createSetParams[0] = IAllocationManagerTypes.CreateSetParams({
-            operatorSetId: operatorSetId,
-            strategies: strategies
-        });
-
-        // AllocationManager still expects uint32 for its internal ID
-        IAllocationManager(ALLOCATION_MANAGER).createOperatorSets(
-            address(this), createSetParams
-        );
-
-        REGISTRY_COORDINATOR.createOperatorSet(operatorSetId);
-
-        return operatorSetId;
-    }
-
-    /// @notice Internal function to add strategies to an operator set
-    /// @param operatorSetId ID of the operator set (encoded uint96)
-    /// @param strategies Array of strategies to add
-    /// @dev Calls registry coordinator to add the strategies
-    function _addStrategiesToOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        internal
-    {
-        IAllocationManager(ALLOCATION_MANAGER).addStrategiesToOperatorSet(
-            address(this), operatorSetId, strategies
-        );
-
-        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
-        // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-        IAllocationManager(ALLOCATION_MANAGER).addStrategiesToOperatorSet(
-            address(this), operatorSetId, strategies
-        );
-
-        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
-        // REGISTRY_COORDINATOR.addStrategiesToOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-    }
-
-    /// @notice Internal function to remove strategies from an operator set
-    /// @param operatorSetId ID of the operator set (encoded uint96)
-    /// @param strategies Array of strategies to remove
-    /// @dev Calls registry coordinator to remove the strategies
-    function _removeStrategiesFromOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        internal
-    {
-        IAllocationManager(ALLOCATION_MANAGER).removeStrategiesFromOperatorSet(
-            address(this), operatorSetId, strategies
-        );
-
-        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
-        // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-        IAllocationManager(ALLOCATION_MANAGER).removeStrategiesFromOperatorSet(
-            address(this), operatorSetId, strategies
-        );
-
-        // Registry coordinator might need the encoded ID if it performs its own actions (check its implementation)
-        // REGISTRY_COORDINATOR.removeStrategiesFromOperatorSet(operatorSetId, strategies); // Assuming Taiyi doesn't need this directly
-    }
-
-    /// @notice Internal function to process a rewards claim
-    /// @param claim The merkle claim information
-    /// @param recipient Address to receive the claimed rewards
-    /// @dev Calls rewards coordinator to process the claim
-    function _processClaim(
-        IRewardsCoordinator.RewardsMerkleClaim calldata claim,
-        address recipient
-    )
-        internal
-    {
-        IRewardsCoordinator(REWARDS_COORDINATOR).processClaim(claim, recipient);
-    }
-
-    /// @notice Internal function to update AVS metadata URI
-    /// @param metadataURI New metadata URI
-    /// @dev Calls AVS directory to update the metadata URI
-    function _updateAVSMetadataURI(string calldata metadataURI) internal {
-        AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
-    }
-
-    /// @notice Internal function to set the claimer for rewards
-    /// @param claimer Address of the claimer
-    /// @dev Calls rewards coordinator to set the claimer
-    function _setClaimerFor(address claimer) internal {
-        REWARDS_COORDINATOR.setClaimerFor(claimer);
     }
 
     /// @notice Internal function to set the rewards initiator

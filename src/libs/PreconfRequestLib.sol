@@ -8,10 +8,6 @@ import {
 import { PreconfRequestAType } from "../types/PreconfRequestATypes.sol";
 
 library PreconfRequestLib {
-    /*//////////////////////////////////////////////////////
-                          CONSTANTS
-    //////////////////////////////////////////////////////*/
-
     bytes32 constant BLOCKSPACE_ALLOCATION_TYPEHASH = keccak256(
         "BlockspaceAllocation(uint256 gasLimit,address sender,address recipient,uint256 deposit,uint256 tip,uint256 targetSlot,uint256 blobCount)"
     );

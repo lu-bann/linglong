@@ -45,4 +45,6 @@ abstract contract LinglongSlasherStorage is ILinglongSlasher {
 
     /// @notice Set of registered violation types
     EnumerableSet.Bytes32Set internal registeredViolationTypes;
+
+    uint256[50] private __GAP;
 }

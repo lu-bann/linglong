@@ -7,7 +7,7 @@ import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinat
 
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 
-import { RestakingProtocolMap } from "../libs/RestakingProtocolMap.sol";
+import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
 import {
     IAllocationManager,
     IAllocationManagerTypes
@@ -45,7 +45,7 @@ import { EnumerableSet } from
 /// @title Storage contract for the RegistryCoordinator
 abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     using EnumerableSet for EnumerableSet.AddressSet;
-    using RestakingProtocolMap for RestakingProtocolMap.Map;
+    using RestakingProtocolMapLib for RestakingProtocolMapLib.Map;
 
     /// @notice The EIP-712 typehash used for registering BLS public keys
     bytes32 public constant PUBKEY_REGISTRATION_TYPEHASH =
@@ -80,7 +80,7 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     address public symbioticMiddleware;
 
     /// @notice Map middleware addresses to their protocol type
-    RestakingProtocolMap.Map internal restakingProtocolMap;
+    RestakingProtocolMapLib.Map internal restakingProtocolMap;
 
     /// @notice The restaking middleware addresses
     EnumerableSet.AddressSet internal restakingMiddleware;
