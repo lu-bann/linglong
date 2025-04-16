@@ -17,6 +17,8 @@ import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+
+import { IRegistry } from "@urc/IRegistry.sol";
 import { Registry } from "@urc/Registry.sol";
 
 // Storage layout for EigenLayerMiddleware
@@ -74,7 +76,7 @@ abstract contract EigenLayerMiddlewareStorage is IEigenLayerMiddleware {
     uint256 public UNDERWRITER_SHARE_BIPS;
 
     /// @notice Registry contract
-    Registry public REGISTRY;
+    IRegistry public REGISTRY;
 
     /// @notice Reward Initiator address
     address public REWARD_INITIATOR;

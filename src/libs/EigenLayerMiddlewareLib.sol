@@ -22,6 +22,8 @@ import { OperatorSet } from
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
+
+import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
@@ -365,7 +367,7 @@ library EigenLayerMiddlewareLib {
     /// @param operator The operator address
     /// @param registrationRoot The registration root to unregister
     function unregisterValidators(
-        Registry registry,
+        IRegistry registry,
         mapping(address => mapping(bytes32 => DelegationStore)) storage
             operatorDelegations,
         mapping(address => EnumerableSet.Bytes32Set) storage operatorRegistrationRoots,
@@ -458,7 +460,7 @@ library EigenLayerMiddlewareLib {
     /// @param pubkey BLS public key of the validator
     /// @return The signed delegation information
     function getDelegation(
-        Registry registry,
+        IRegistry registry,
         mapping(address => mapping(bytes32 => DelegationStore)) storage
             operatorDelegations,
         address operator,
@@ -469,8 +471,10 @@ library EigenLayerMiddlewareLib {
         view
         returns (ISlasher.SignedDelegation memory)
     {
-        (address owner,,, uint32 registeredAt,,) =
-            registry.registrations(registrationRoot);
+        IRegistry.OperatorData memory operatorData =
+            registry.getOperatorData(registrationRoot);
+        address owner = operatorData.owner;
+        uint48 registeredAt = operatorData.registeredAt;
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();

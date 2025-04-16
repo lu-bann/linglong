@@ -106,7 +106,15 @@ contract EigenlayerMiddlewareTest is Test {
         _setupEigenLayerAndAccounts();
 
         // Deploy core infrastructure
-        registry = new Registry();
+        registry = new Registry(
+            IRegistry.Config({
+                minCollateralWei: 0.1 ether,
+                fraudProofWindow: 7200,
+                unregistrationDelay: 7200,
+                slashWindow: 7200,
+                optInDelay: 7200
+            })
+        );
         _deployTaiyiRegistryCoordinator();
         _deployLinglongSlasher();
         _setupRegistryCoordinatorRegistries();
@@ -311,9 +319,10 @@ contract EigenlayerMiddlewareTest is Test {
     function _createRegistrations()
         internal
         pure
-        returns (IRegistry.Registration[] memory)
+        returns (IRegistry.SignedRegistration[] memory)
     {
-        IRegistry.Registration[] memory registrations = new IRegistry.Registration[](2);
+        IRegistry.SignedRegistration[] memory registrations =
+            new IRegistry.SignedRegistration[](2);
 
         // Example BLS public keys and signatures
         for (uint256 i = 0; i < 2; i++) {
@@ -336,7 +345,7 @@ contract EigenlayerMiddlewareTest is Test {
             signature.y.c1.b = 0;
 
             registrations[i] =
-                IRegistry.Registration({ pubkey: pubkey, signature: signature });
+                IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
         }
 
         return registrations;
@@ -743,7 +752,8 @@ contract EigenlayerMiddlewareTest is Test {
         uint256 validatorPrivKey2 = 67_890; // Second validator key
 
         // Create registrations array with validator public keys
-        IRegistry.Registration[] memory registrations = new IRegistry.Registration[](2);
+        IRegistry.SignedRegistration[] memory registrations =
+            new IRegistry.SignedRegistration[](2);
 
         registrations[0] = _createRegistration(validatorPrivKey1, primaryOp);
         registrations[1] = _createRegistration(validatorPrivKey2, primaryOp);
@@ -817,13 +827,13 @@ contract EigenlayerMiddlewareTest is Test {
     )
         internal
         view
-        returns (IRegistry.Registration memory)
+        returns (IRegistry.SignedRegistration memory)
     {
         BLS.G1Point memory pubkey = BLS.toPublicKey(secretKey);
         BLS.G2Point memory signature =
             _createRegistrationSignature(secretKey, ownerAddress);
 
-        return IRegistry.Registration({ pubkey: pubkey, signature: signature });
+        return IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
     }
 
     // Helper function to create registration signatures
