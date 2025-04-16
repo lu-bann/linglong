@@ -59,7 +59,7 @@ interface IEigenLayerMiddleware {
     // ========= FUNCTIONS =========
 
     function registerValidators(
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,

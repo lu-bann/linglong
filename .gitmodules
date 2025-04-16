@@ -60,6 +60,7 @@
 [submodule "lib/urc"]
 	path = lib/urc
 	url = https://github.com/eth-fabric/urc
+	commit = dcd095c8650857537245ca6f355ae7f99b4773cb
 
 [submodule "lib/solady"]
 	path = lib/solady

@@ -7,7 +7,7 @@
   evm_version = "prague"           # to add BLS precompile
   fuzz = { runs = 1_000 }
   gas_reports = ["*"]
-  optimizer = true
+  optimizer = false
   optimizer_runs = 10_000
   out = "out"
   script = "script"
@@ -46,6 +46,8 @@ remappings = [
   "lib/middleware-sdk/:@symbiotic-test/=lib/middleware-sdk/lib/core/test/",
   "lib/middleware-sdk/:@crypto-lib/=lib/middleware-sdk/lib/crypto-lib/src/",
   "lib/middleware-sdk/:forge-std/=lib/middleware-sdk/lib/forge-std/src/",
+
+  "lib/urc/:@openzeppelin/=lib/urc/lib/openzeppelin-contracts/",
 
   "lib/openzeppelin-contracts-upgradeable/:@openzeppelin/contracts/=lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/"
 ]
@@ -101,3 +103,6 @@ remappings = [
   optimism = "https://optimism-mainnet.infura.io/v3/${API_KEY_INFURA}"
   polygon = "https://polygon-mainnet.infura.io/v3/${API_KEY_INFURA}"
   sepolia = "https://sepolia.infura.io/v3/${API_KEY_INFURA}"
+
+[dependencies]
+forge-std = "1.9.6"

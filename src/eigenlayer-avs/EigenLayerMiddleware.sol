@@ -177,7 +177,7 @@ contract EigenLayerMiddleware is
         _setRewardsInitiator(_rewardInitiator);
         UNDERWRITER_SHARE_BIPS = _underwriterShareBips;
         REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
-        REGISTRY = Registry(_registry);
+        REGISTRY = IRegistry(_registry);
         SLASHER = address(ILinglongSlasher(_slasher));
         ALLOCATION_MANAGER = _allocationManager;
     }
@@ -195,7 +195,7 @@ contract EigenLayerMiddleware is
     /// @return registrationRoot Root hash of the registered validators
     /// @dev Registers validators with the Registry contract and sends required collateral
     function registerValidators(
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
@@ -261,7 +261,7 @@ contract EigenLayerMiddleware is
     /// @dev Registers the slasher contract with the Registry and stores delegation information
     function optInToSlasher(
         bytes32 registrationRoot,
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
@@ -597,7 +597,7 @@ contract EigenLayerMiddleware is
     /// @return registrationRoot Root hash of the registered validators
     /// @dev Verifies delegatee is registered and handles registration with the Registry
     function _registerValidators(
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
