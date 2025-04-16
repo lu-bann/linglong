@@ -198,11 +198,6 @@ interface ISymbioticNetworkMiddleware {
         view
         returns (uint96[] memory allocatedSubnetworks);
 
-    /// @notice Get the total power of a list of operators
-    /// @param operators Array of operator addresses
-    /// @return The total power
-    function totalPower(address[] memory operators) external view returns (uint256);
-
     // ========= STRUCTS =========
 
     /// @notice Parameters for slashing an operator

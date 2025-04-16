@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title SafeCast96To32
+/// @title SafeCast96To32Lib
 /// @dev Wrappers over Solidity's uintXX casting operators with added overflow
 /// checks specifically for uint96 <-> uint32 conversions.
-library SafeCast96To32 {
+library SafeCast96To32Lib {
     error SafeCastOverflowedUintDowncast(uint8 bits, uint256 value);
 
     /// @dev Returns the downcasted uint32 from uint96, reverting on

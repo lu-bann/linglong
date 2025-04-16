@@ -10,7 +10,7 @@ Libraries and Dependencies:
 
 | File | Notes |
 | -------- | -------- |
-| [`RestakingProtocolMap.sol`](../src/libs/RestakingProtocolMap.sol) | Protocol mapping utilities |
+| [`RestakingProtocolMapLib.sol`](../src/libs/RestakingProtocolMapLib.sol) | Protocol mapping utilities |
 | [`EigenLayerMiddlewareLib.sol`](../src/libs/EigenLayerMiddlewareLib.sol) | EigenLayer middleware utilities |
 
 ## Overview
