@@ -46,8 +46,10 @@ library SlashingLib {
             ISlasher.SignedDelegation[] memory delegations
         )
     {
-        (address owner,,, uint32 registeredAt,,) =
-            Registry(registryAddress).registrations(registrationRoot);
+        IRegistry.OperatorData memory operatorData =
+            IRegistry(registryAddress).getOperatorData(registrationRoot);
+        address owner = operatorData.owner;
+        uint48 registeredAt = operatorData.registeredAt;
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
@@ -90,7 +92,7 @@ library SlashingLib {
         bytes32 registrationRoot,
         address slasher,
         address middleware,
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
@@ -136,8 +138,12 @@ library SlashingLib {
     )
         public
     {
-        (address owner,,, uint32 registeredAt, uint32 unregisteredAt, uint32 slashedAt) =
-            Registry(registryAddress).registrations(registrationRoot);
+        IRegistry.OperatorData memory operatorData =
+            IRegistry(registryAddress).getOperatorData(registrationRoot);
+        address owner = operatorData.owner;
+        uint48 registeredAt = operatorData.registeredAt;
+        uint48 unregisteredAt = operatorData.unregisteredAt;
+        uint48 slashedAt = operatorData.slashedAt;
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
@@ -155,8 +161,10 @@ library SlashingLib {
             revert OperatorUnregistered();
         }
 
-        if (registeredAt + Registry(registryAddress).FRAUD_PROOF_WINDOW() > block.number)
-        {
+        if (
+            registeredAt + IRegistry(registryAddress).getConfig().fraudProofWindow
+                > block.number
+        ) {
             revert OperatorFraudProofPeriodNotOver();
         }
 
@@ -194,8 +202,10 @@ library SlashingLib {
         view
         returns (ISlasher.SignedDelegation memory)
     {
-        (address owner,,, uint32 registeredAt,,) =
-            Registry(registryAddress).registrations(registrationRoot);
+        IRegistry.OperatorData memory operatorData =
+            IRegistry(registryAddress).getOperatorData(registrationRoot);
+        address owner = operatorData.owner;
+        uint48 registeredAt = operatorData.registeredAt;
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();

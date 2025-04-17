@@ -94,7 +94,7 @@ interface ISymbioticNetworkMiddleware {
     /// @param data Additional data for registration
     /// @return registrationRoot The registration root
     function registerValidators(
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
@@ -128,7 +128,7 @@ interface ISymbioticNetworkMiddleware {
     /// @param data Additional data for registration
     function optInToSlasher(
         bytes32 registrationRoot,
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,

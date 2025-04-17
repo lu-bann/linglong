@@ -183,7 +183,7 @@ contract SymbioticNetworkMiddleware is
     /// @notice Register multiple validators for a single transaction
     /// @inheritdoc ISymbioticNetworkMiddleware
     function registerValidators(
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,
@@ -260,7 +260,7 @@ contract SymbioticNetworkMiddleware is
     /// @inheritdoc ISymbioticNetworkMiddleware
     function optInToSlasher(
         bytes32 registrationRoot,
-        IRegistry.Registration[] calldata registrations,
+        IRegistry.SignedRegistration[] calldata registrations,
         BLS.G2Point[] calldata delegationSignatures,
         BLS.G1Point calldata delegateePubKey,
         address delegateeAddress,

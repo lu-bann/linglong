@@ -33,6 +33,8 @@ import {
     TransparentUpgradeableProxy
 } from
     "../lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+
+import { IRegistry } from "@urc/IRegistry.sol";
 import { Registry } from "@urc/Registry.sol";
 import { PubkeyRegistry } from "src/operator-registries/PubkeyRegistry.sol";
 import { SocketRegistry } from "src/operator-registries/SocketRegistry.sol";
@@ -145,7 +147,15 @@ contract Deploy is Script, Test {
 
             deployEigenLayer(configFileName);
 
-            Registry registry = new Registry();
+            IRegistry.Config memory config = IRegistry.Config({
+                minCollateralWei: 0.1 ether,
+                fraudProofWindow: 7200,
+                unregistrationDelay: 7200,
+                slashWindow: 7200,
+                optInDelay: 7200
+            });
+
+            Registry registry = new Registry(config);
             emit log_address(address(registry));
             urc = address(registry);
         } else if (

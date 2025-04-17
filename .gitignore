@@ -27,3 +27,7 @@ target/
 dist/
 node_modules/
 package-lock.json
+
+
+# Soldeer
+/dependencies
