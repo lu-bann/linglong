@@ -12,7 +12,11 @@ if [ -z "$NETWORK" ]; then
     export NETWORK="devnet"
 fi
 export FOUNDRY_PROFILE=ci
-forge script --rpc-url $EXECUTION_URL --use 0.8.25\
--vvvv --broadcast ./lib/middleware-sdk/lib/core/script/deploy/Core.s.sol:CoreScript \
+
+pushd ./lib/middleware-sdk/lib/core
+forge script --rpc-url $EXECUTION_URL \
+-vvvv --private-key $PROXY_OWNER_PRIVATE_KEY --broadcast ./script/deploy/Core.s.sol:CoreScript \
+--optimizer-runs  5000  --optimize true --via-ir \
 --sig "run(address)" \
 -- 0xd491Ee97C3CA8857d1Ea0F37954eb4e6d8A8e590
+popd
