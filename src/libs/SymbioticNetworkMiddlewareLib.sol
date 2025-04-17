@@ -12,8 +12,7 @@ import { IVault } from "@symbiotic/interfaces/vault/IVault.sol";
 
 import { IRegistry } from "@urc/IRegistry.sol";
 
-import { DelegationStore } from "../storage/DelegationStore.sol";
-
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { ECDSALib } from "./ECDSALib.sol";
 import { OperatorSubsetLib } from "./OperatorSubsetLib.sol";
 import { SafeCast96To32Lib } from "./SafeCast96To32Lib.sol";

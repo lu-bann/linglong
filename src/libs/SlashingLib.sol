@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { DelegationStore } from "../storage/DelegationStore.sol";
+import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
+
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
@@ -17,7 +19,10 @@ library SlashingLib {
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
 
-    /// @notice Errors
+    // ==============================================================================================
+    // ================================= ERRORS ===================================================
+    // ==============================================================================================
+
     error RegistrationRootNotFound();
     error OperatorNotOwnerOfRegistrationRoot();
     error OperatorNotRegistered();
@@ -25,6 +30,24 @@ library SlashingLib {
     error OperatorFraudProofPeriodNotOver();
     error OperatorSlashed();
     error PubKeyNotFound();
+
+    // ==============================================================================================
+    // ================================= STRUCTS ==================================================
+    // ==============================================================================================
+
+    /// @notice Common parameters for delegation operations
+    struct DelegationParams {
+        bytes32 registrationRoot;
+        IRegistry.SignedRegistration[] registrations;
+        BLS.G2Point[] delegationSignatures;
+        BLS.G1Point delegateePubKey;
+        address delegateeAddress;
+        bytes[] data;
+    }
+
+    // ==============================================================================================
+    // ================================= DELEGATION FUNCTIONS ======================================
+    // ==============================================================================================
 
     /// @notice Get all delegations for an operator under a registration root
     /// @param registryAddress The registry contract address
@@ -73,117 +96,6 @@ library SlashingLib {
         }
     }
 
-    /// @notice Opt in to slasher and store delegations
-    /// @param registry The registry contract
-    /// @param delegationStore The delegation store for the operator
-    /// @param registrationRoots The set of registration roots
-    /// @param registrationRoot The registration root to opt in
-    /// @param slasher The slasher contract address
-    /// @param middleware The middleware contract address
-    /// @param registrations Array of validator registrations
-    /// @param delegationSignatures BLS signatures for delegations
-    /// @param delegateePubKey BLS public key of delegatee
-    /// @param delegateeAddress Address of delegatee
-    /// @param data Additional data for delegations
-    function optInToSlasher(
-        IRegistry registry,
-        DelegationStore storage delegationStore,
-        EnumerableSet.Bytes32Set storage registrationRoots,
-        bytes32 registrationRoot,
-        address slasher,
-        address middleware,
-        IRegistry.SignedRegistration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
-        public
-    {
-        registry.optInToSlasher(registrationRoot, slasher, middleware);
-        registrationRoots.add(registrationRoot);
-
-        for (uint256 i = 0; i < registrations.length; ++i) {
-            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
-                delegation: ISlasher.Delegation({
-                    proposer: registrations[i].pubkey,
-                    delegate: delegateePubKey,
-                    committer: delegateeAddress,
-                    slot: type(uint64).max,
-                    metadata: data[i]
-                }),
-                signature: delegationSignatures[i]
-            });
-
-            bytes32 pubkeyHash = keccak256(abi.encode(registrations[i].pubkey));
-            delegationStore.delegations[pubkeyHash] = signedDelegation;
-            delegationStore.delegationMap.set(i, pubkeyHash);
-        }
-    }
-
-    /// @notice Batch set delegations for a registration root
-    /// @param registryAddress The registry contract address
-    /// @param delegationStore The delegation store
-    /// @param registrationRoot The registration root
-    /// @param operator The operator address
-    /// @param pubkeys BLS public keys
-    /// @param delegations Signed delegations
-    function batchSetDelegations(
-        address registryAddress,
-        DelegationStore storage delegationStore,
-        bytes32 registrationRoot,
-        address operator,
-        BLS.G1Point[] calldata pubkeys,
-        ISlasher.SignedDelegation[] calldata delegations
-    )
-        public
-    {
-        IRegistry.OperatorData memory operatorData =
-            IRegistry(registryAddress).getOperatorData(registrationRoot);
-        address owner = operatorData.owner;
-        uint48 registeredAt = operatorData.registeredAt;
-        uint48 unregisteredAt = operatorData.unregisteredAt;
-        uint48 slashedAt = operatorData.slashedAt;
-
-        if (registeredAt == 0) {
-            revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
-        }
-
-        if (slashedAt != 0) {
-            revert OperatorSlashed();
-        }
-
-        if (unregisteredAt < block.number) {
-            revert OperatorUnregistered();
-        }
-
-        if (
-            registeredAt + IRegistry(registryAddress).getConfig().fraudProofWindow
-                > block.number
-        ) {
-            revert OperatorFraudProofPeriodNotOver();
-        }
-
-        require(pubkeys.length == delegations.length, "Array length mismatch");
-        require(
-            delegationStore.delegationMap.length() == pubkeys.length,
-            "Array length mismatch"
-        );
-
-        for (uint256 i = 0; i < pubkeys.length; i++) {
-            bytes32 pubkeyHash = keccak256(abi.encode(pubkeys[i]));
-
-            (, bytes32 storedHash) = delegationStore.delegationMap.at(i);
-            if (storedHash == pubkeyHash) {
-                delegationStore.delegations[pubkeyHash] = delegations[i];
-            }
-        }
-    }
-
     /// @notice Get a specific delegation by pubkey
     /// @param registryAddress The registry contract address
     /// @param delegationStore The delegation store
@@ -224,6 +136,89 @@ library SlashingLib {
         }
     }
 
+    // ==============================================================================================
+    // ================================= SLASHING FUNCTIONS ========================================
+    // ==============================================================================================
+
+    /// @notice Opt in to slasher and store delegations
+    /// @param registry The registry contract
+    /// @param delegationStore The delegation store for the operator
+    /// @param registrationRoots The set of registration roots
+    /// @param slasher The slasher contract address
+    /// @param middleware The middleware contract address
+    /// @param params Common delegation parameters
+    function optInToSlasher(
+        IRegistry registry,
+        DelegationStore storage delegationStore,
+        EnumerableSet.Bytes32Set storage registrationRoots,
+        address slasher,
+        address middleware,
+        DelegationParams calldata params
+    )
+        public
+    {
+        registry.optInToSlasher(params.registrationRoot, slasher, middleware);
+        registrationRoots.add(params.registrationRoot);
+
+        for (uint256 i = 0; i < params.registrations.length; ++i) {
+            ISlasher.SignedDelegation memory signedDelegation = ISlasher.SignedDelegation({
+                delegation: ISlasher.Delegation({
+                    proposer: params.registrations[i].pubkey,
+                    delegate: params.delegateePubKey,
+                    committer: params.delegateeAddress,
+                    slot: type(uint64).max,
+                    metadata: params.data[i]
+                }),
+                signature: params.delegationSignatures[i]
+            });
+
+            _setDelegations(
+                delegationStore, i, signedDelegation, params.registrations[i].pubkey
+            );
+        }
+    }
+
+    /// @notice Batch set delegations for a registration root
+    /// @param registryAddress The registry contract address
+    /// @param delegationStore The delegation store
+    /// @param registrationRoot The registration root
+    /// @param restakingMiddleware The restaking middleware address
+    /// @param pubkeys BLS public keys
+    /// @param delegations Signed delegations
+    function batchSetDelegations(
+        address registryAddress,
+        DelegationStore storage delegationStore,
+        bytes32 registrationRoot,
+        address restakingMiddleware,
+        BLS.G1Point[] calldata pubkeys,
+        ISlasher.SignedDelegation[] calldata delegations
+    )
+        public
+    {
+        _validateOperatorRegistration(
+            registryAddress, registrationRoot, restakingMiddleware
+        );
+
+        require(pubkeys.length == delegations.length, "Array length mismatch");
+        require(
+            delegationStore.delegationMap.length() == pubkeys.length,
+            "Array length mismatch"
+        );
+
+        for (uint256 i = 0; i < pubkeys.length; i++) {
+            bytes32 pubkeyHash = keccak256(abi.encode(pubkeys[i]));
+
+            (, bytes32 storedHash) = delegationStore.delegationMap.at(i);
+            if (storedHash == pubkeyHash) {
+                delegationStore.delegations[pubkeyHash] = delegations[i];
+            }
+        }
+    }
+
+    // ==============================================================================================
+    // ================================= REGISTRATION FUNCTIONS ====================================
+    // ==============================================================================================
+
     /// @notice Get all registration roots for an operator
     /// @param registrationRoots The set of registration roots
     /// @return Array of registration roots
@@ -242,5 +237,62 @@ library SlashingLib {
         }
 
         return result;
+    }
+
+    // ==============================================================================================
+    // ================================= INTERNAL FUNCTIONS ========================================
+    // ==============================================================================================
+
+    /// @notice Internal helper to set delegations
+    function _setDelegations(
+        DelegationStore storage delegationStore,
+        uint256 index,
+        ISlasher.SignedDelegation memory signedDelegation,
+        BLS.G1Point memory pubkey
+    )
+        internal
+    {
+        bytes32 pubkeyHash = keccak256(abi.encode(pubkey));
+        delegationStore.delegations[pubkeyHash] = signedDelegation;
+        delegationStore.delegationMap.set(index, pubkeyHash);
+    }
+
+    /// @notice Internal helper to validate operator registration
+    function _validateOperatorRegistration(
+        address registryAddress,
+        bytes32 registrationRoot,
+        address restakingMiddleware
+    )
+        internal
+    {
+        IRegistry.OperatorData memory operatorData =
+            IRegistry(registryAddress).getOperatorData(registrationRoot);
+        address owner = operatorData.owner;
+        uint48 registeredAt = operatorData.registeredAt;
+        uint48 unregisteredAt = operatorData.unregisteredAt;
+        uint48 slashedAt = operatorData.slashedAt;
+
+        if (registeredAt == 0) {
+            revert RegistrationRootNotFound();
+        }
+
+        if (owner != restakingMiddleware) {
+            revert OperatorNotOwnerOfRegistrationRoot();
+        }
+
+        if (slashedAt != 0) {
+            revert OperatorSlashed();
+        }
+
+        if (unregisteredAt < block.number) {
+            revert OperatorUnregistered();
+        }
+
+        if (
+            registeredAt + IRegistry(registryAddress).getConfig().fraudProofWindow
+                > block.number
+        ) {
+            revert OperatorFraudProofPeriodNotOver();
+        }
     }
 }

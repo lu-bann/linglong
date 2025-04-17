@@ -91,7 +91,6 @@ contract EigenlayerMiddlewareTest is Test {
 
     uint32 public operatorSetId; // Store the operator set ID created in setUp
 
-    // Modifiers
     modifier impersonate(address user) {
         vm.startPrank(user);
         _;
@@ -264,7 +263,7 @@ contract EigenlayerMiddlewareTest is Test {
 
         // Todo: silence this for the CI
         // Register the validator
-        //_validatorRegistration(primaryOp, underwriterOp);
+        // _validatorRegistration(primaryOp, underwriterOp);
     }
 
     /// @dev Setup operators and give them ETH and WETH

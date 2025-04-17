@@ -33,6 +33,13 @@ contract TaiyiInteractiveChallengerTest is Test {
     TaiyiInteractiveChallenger taiyiInteractiveChallenger;
     TaiyiParameterManager parameterManager;
 
+    struct ProofData {
+        bytes proofValuesBytes;
+        bytes proofBytesBytes;
+        uint64 blockNumber;
+        bytes32 blockHash;
+    }
+
     function setUp() public {
         verifierAddress = address(new SP1Verifier());
 
@@ -127,6 +134,32 @@ contract TaiyiInteractiveChallengerTest is Test {
             underwriterSignedBlockspaceAllocation: hex"52e31ae52880f54549f244d411497e4990b2f8717cb61b7b0cae46cb2435fb3c072a6cf466b93a2539644bdc002480290794a0a96ee8c576f110f5185929b1771c",
             rawTx: bytes(transaction),
             underwriterSignedRawTx: hex"42e31ae52880f54549f244d411497e4990b2f8717cb61b7b0cae46cb2435fb3c072a6cf466b93a2539644bdc002480290794a0a96ee8c576f110f5185929b1771c"
+        });
+    }
+
+    function _readProofData(string memory jsonPath) internal returns (ProofData memory) {
+        string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
+
+        string memory proofValues = vm.parseJsonString(json, ".public_values");
+        string memory proofBytes = vm.parseJsonString(json, ".proof");
+
+        bytes memory proofValuesBytes = vm.parseBytes(proofValues);
+        bytes memory proofBytesBytes = vm.parseBytes(proofBytes);
+
+        // Decode proof values for block info
+        (
+            uint64 proofBlockTimestamp,
+            bytes32 proofBlockHash,
+            uint64 proofBlockNumber,
+            address proofUnderwriterAddress,
+            bytes memory proofSignature
+        ) = abi.decode(proofValuesBytes, (uint64, bytes32, uint64, address, bytes));
+
+        return ProofData({
+            proofValuesBytes: proofValuesBytes,
+            proofBytesBytes: proofBytesBytes,
+            blockNumber: proofBlockNumber,
+            blockHash: proofBlockHash
         });
     }
 
@@ -1007,16 +1040,14 @@ contract TaiyiInteractiveChallengerTest is Test {
     //  Test: Prove (PreconfRequestAType)
     // =========================================
     function testProveSuccessPreconfRequestAType() public {
-        string memory json = vm.readFile(
-            string.concat(
-                vm.projectRoot(),
-                "/test/test-data/zkvm/poi-preconf-type-a-included-test-data.json"
-            )
-        );
+        string memory jsonPath =
+            "/test/test-data/zkvm/poi-preconf-type-a-included-test-data.json";
+        string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
 
         bytes32 vk = bytes32(vm.parseBytes(vm.parseJsonString(json, ".vk")));
         uint256 genesisTimestamp = uint256(vm.parseJsonUint(json, ".genesis_time"));
         address taiyiCore = vm.parseJsonAddress(json, ".taiyi_core");
+
         vm.startPrank(owner);
         taiyiInteractiveChallenger.setInteractiveFraudProofVKey(vk);
         parameterManager.setGenesisTimestamp(genesisTimestamp);
@@ -1026,30 +1057,17 @@ contract TaiyiInteractiveChallengerTest is Test {
         vm.startPrank(user);
         vm.chainId(3_151_908);
 
-        // Decode proof values
-        (
-            uint64 proofBlockTimestamp,
-            bytes32 proofBlockHash,
-            uint64 proofBlockNumber,
-            address proofUnderwriterAddress,
-            bytes memory proofSignature
-        ) = abi.decode(
-            vm.parseBytes(vm.parseJsonString(json, ".public_values")),
-            (uint64, bytes32, uint64, address, bytes)
-        );
-
-        PreconfRequestAType memory preconfRequestAType = _readPreconfRequestAType(
-            "/test/test-data/zkvm/poi-preconf-type-a-included-test-data.json"
-        );
+        PreconfRequestAType memory preconfRequestAType =
+            _readPreconfRequestAType(jsonPath);
+        ProofData memory proofData = _readProofData(jsonPath);
 
         uint256 bond = parameterManager.challengeBond();
-
         bytes32 dataHash =
             PreconfRequestLib.getPreconfRequestATypeHash(preconfRequestAType);
 
         // This emulates the block hash for the inclusion block
-        vm.roll(proofBlockNumber + 10);
-        vm.setBlockhash(proofBlockNumber, proofBlockHash);
+        vm.roll(proofData.blockNumber + 10);
+        vm.setBlockhash(proofData.blockNumber, proofData.blockHash);
 
         uint256 blockTimestamp = (
             preconfRequestAType.slot + parameterManager.challengeCreationWindow()
@@ -1072,13 +1090,9 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        string memory proofValues = vm.parseJsonString(json, ".public_values");
-        string memory proofBytes = vm.parseJsonString(json, ".proof");
-
-        bytes memory proofValuesBytes = vm.parseBytes(proofValues);
-        bytes memory proofBytesBytes = vm.parseBytes(proofBytes);
-
-        taiyiInteractiveChallenger.prove(challengeId, proofValuesBytes, proofBytesBytes);
+        taiyiInteractiveChallenger.prove(
+            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
         assertEq(openChallenges.length, 0);
@@ -1090,16 +1104,14 @@ contract TaiyiInteractiveChallengerTest is Test {
     //  Test: Prove (PreconfRequestAType multiple txs)
     // =========================================
     function testProveSuccessPreconfRequestATypeMultipleTxs() public {
-        string memory json = vm.readFile(
-            string.concat(
-                vm.projectRoot(),
-                "/test/test-data/zkvm/poi-preconf-type-a-multiple-txs-included-test-data.json"
-            )
-        );
+        string memory jsonPath =
+            "/test/test-data/zkvm/poi-preconf-type-a-multiple-txs-included-test-data.json";
+        string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
 
         bytes32 vk = bytes32(vm.parseBytes(vm.parseJsonString(json, ".vk")));
         uint256 genesisTimestamp = uint256(vm.parseJsonUint(json, ".genesis_time"));
         address taiyiCore = vm.parseJsonAddress(json, ".taiyi_core");
+
         vm.startPrank(owner);
         taiyiInteractiveChallenger.setInteractiveFraudProofVKey(vk);
         parameterManager.setGenesisTimestamp(genesisTimestamp);
@@ -1109,30 +1121,17 @@ contract TaiyiInteractiveChallengerTest is Test {
         vm.startPrank(user);
         vm.chainId(3_151_908);
 
-        // Decode proof values
-        (
-            uint64 proofBlockTimestamp,
-            bytes32 proofBlockHash,
-            uint64 proofBlockNumber,
-            address proofUnderwriterAddress,
-            bytes memory proofSignature
-        ) = abi.decode(
-            vm.parseBytes(vm.parseJsonString(json, ".public_values")),
-            (uint64, bytes32, uint64, address, bytes)
-        );
-
-        PreconfRequestAType memory preconfRequestAType = _readPreconfRequestAType(
-            "/test/test-data/zkvm/poi-preconf-type-a-multiple-txs-included-test-data.json"
-        );
+        PreconfRequestAType memory preconfRequestAType =
+            _readPreconfRequestAType(jsonPath);
+        ProofData memory proofData = _readProofData(jsonPath);
 
         uint256 bond = parameterManager.challengeBond();
-
         bytes32 dataHash =
             PreconfRequestLib.getPreconfRequestATypeHash(preconfRequestAType);
 
         // This emulates the block hash for the inclusion block
-        vm.roll(proofBlockNumber + 10);
-        vm.setBlockhash(proofBlockNumber, proofBlockHash);
+        vm.roll(proofData.blockNumber + 10);
+        vm.setBlockhash(proofData.blockNumber, proofData.blockHash);
 
         uint256 blockTimestamp = (
             preconfRequestAType.slot + parameterManager.challengeCreationWindow()
@@ -1155,13 +1154,9 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        string memory proofValues = vm.parseJsonString(json, ".public_values");
-        string memory proofBytes = vm.parseJsonString(json, ".proof");
-
-        bytes memory proofValuesBytes = vm.parseBytes(proofValues);
-        bytes memory proofBytesBytes = vm.parseBytes(proofBytes);
-
-        taiyiInteractiveChallenger.prove(challengeId, proofValuesBytes, proofBytesBytes);
+        taiyiInteractiveChallenger.prove(
+            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
         assertEq(openChallenges.length, 0);
@@ -1173,16 +1168,14 @@ contract TaiyiInteractiveChallengerTest is Test {
     //  Test: Prove (PreconfRequestBType)
     // =========================================
     function testProveSuccessPreconfRequestBType() public {
-        string memory json = vm.readFile(
-            string.concat(
-                vm.projectRoot(),
-                "/test/test-data/zkvm/poi-preconf-type-b-included-test-data.json"
-            )
-        );
+        string memory jsonPath =
+            "/test/test-data/zkvm/poi-preconf-type-b-included-test-data.json";
+        string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
 
         bytes32 vk = bytes32(vm.parseBytes(vm.parseJsonString(json, ".vk")));
         uint256 genesisTimestamp = uint256(vm.parseJsonUint(json, ".genesis_time"));
         address taiyiCore = vm.parseJsonAddress(json, ".taiyi_core");
+
         vm.startPrank(owner);
         taiyiInteractiveChallenger.setInteractiveFraudProofVKey(vk);
         parameterManager.setGenesisTimestamp(genesisTimestamp);
@@ -1192,25 +1185,17 @@ contract TaiyiInteractiveChallengerTest is Test {
         vm.startPrank(user);
         vm.chainId(3_151_908);
 
-        // Decode proof values
-        (
-            uint64 proofBlockTimestamp,
-            bytes32 proofBlockHash,
-            uint64 proofBlockNumber,
-            address proofUnderwriterAddress,
-            bytes memory proofSignature
-        ) = abi.decode(
-            vm.parseBytes(vm.parseJsonString(json, ".public_values")),
-            (uint64, bytes32, uint64, address, bytes)
-        );
+        PreconfRequestBType memory preconfRequestBType =
+            _readPreconfRequestBType(jsonPath);
+        ProofData memory proofData = _readProofData(jsonPath);
 
-        PreconfRequestBType memory preconfRequestBType = _readPreconfRequestBType(
-            "/test/test-data/zkvm/poi-preconf-type-b-included-test-data.json"
-        );
+        uint256 bond = parameterManager.challengeBond();
+        bytes32 dataHash =
+            PreconfRequestLib.getPreconfRequestBTypeHash(preconfRequestBType);
 
         // This emulates the block hash for the inclusion block
-        vm.roll(proofBlockNumber + 10);
-        vm.setBlockhash(proofBlockNumber, proofBlockHash);
+        vm.roll(proofData.blockNumber + 10);
+        vm.setBlockhash(proofData.blockNumber, proofData.blockHash);
 
         uint256 blockTimestamp = (
             preconfRequestBType.blockspaceAllocation.targetSlot
@@ -1219,14 +1204,9 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         vm.warp(blockTimestamp);
 
-        bytes32 dataHash =
-            PreconfRequestLib.getPreconfRequestBTypeHash(preconfRequestBType);
-
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
         bytes32 challengeId = keccak256(signature);
-
-        uint256 bond = parameterManager.challengeBond();
 
         taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
             preconfRequestBType, signature
@@ -1238,13 +1218,9 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        string memory proofValues = vm.parseJsonString(json, ".public_values");
-        string memory proofBytes = vm.parseJsonString(json, ".proof");
-
-        bytes memory proofValuesBytes = vm.parseBytes(proofValues);
-        bytes memory proofBytesBytes = vm.parseBytes(proofBytes);
-
-        taiyiInteractiveChallenger.prove(challengeId, proofValuesBytes, proofBytesBytes);
+        taiyiInteractiveChallenger.prove(
+            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
         assertEq(openChallenges.length, 0);
