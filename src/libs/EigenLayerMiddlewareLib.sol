@@ -3,8 +3,9 @@ pragma solidity ^0.8.27;
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { DelegationStore } from "../storage/DelegationStore.sol";
+import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
 
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { OperatorSubsetLib } from "./OperatorSubsetLib.sol";
 import { DelegationManager } from
     "@eigenlayer-contracts/src/contracts/core/DelegationManager.sol";

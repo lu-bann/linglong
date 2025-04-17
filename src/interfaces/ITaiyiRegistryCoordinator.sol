@@ -176,6 +176,11 @@ interface ITaiyiRegistryCoordinator {
         view
         returns (RestakingProtocol);
 
+    /// @notice Checks if a middleware is a restaking middleware
+    /// @param middleware The middleware address to check
+    /// @return True if the middleware is a restaking middleware, false otherwise
+    function isRestakingMiddleware(address middleware) external view returns (bool);
+
     /// @notice Get the operators in the specified subnetwork
     /// @param baseSubnetworkId The ID of the subnetwork
     /// @return Array of operator addresses in the subnetwork

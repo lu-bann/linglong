@@ -48,19 +48,13 @@ import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 
 import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
 import { SlashingLib } from "../libs/SlashingLib.sol";
-import { DelegationStore } from "../storage/DelegationStore.sol";
-
+import { DelegationStore } from "../types/CommonTypes.sol";
 /// @title EigenLayer Middleware Contract
 /// @notice Manages operator registration, delegation, and restaking in EigenLayer ecosystem
 /// @dev This contract serves as the interface between validators and EigenLayer infrastructure
 ///      and provides functionality for registering validators, managing operator sets,
 ///      handling rewards, and integrating with external registries
-///
-/// The middleware facilitates:
-/// - Validator registration and management
-/// - Stake delegation and allocation
-/// - Rewards distribution between validators and underwriters
-/// - Integration with BLS registries for validator pubkeys
+
 contract EigenLayerMiddleware is
     OwnableUpgradeable,
     UUPSUpgradeable,
@@ -269,18 +263,21 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        SlashingLib.optInToSlasher(
-            REGISTRY,
-            operatorDelegations[msg.sender][registrationRoot],
-            operatorRegistrationRoots[msg.sender],
+        SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,
-            SLASHER,
-            address(this),
             registrations,
             delegationSignatures,
             delegateePubKey,
             delegateeAddress,
             data
+        );
+        SlashingLib.optInToSlasher(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            SLASHER,
+            address(this),
+            params
         );
     }
 
@@ -583,7 +580,7 @@ contract EigenLayerMiddleware is
             address(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             registrationRoot,
-            msg.sender,
+            address(this),
             pubkeys,
             delegations
         );
@@ -614,19 +611,24 @@ contract EigenLayerMiddleware is
         registrationRoot =
             REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
 
-        // Opt in to slasher
-        SlashingLib.optInToSlasher(
-            REGISTRY,
-            operatorDelegations[msg.sender][registrationRoot],
-            operatorRegistrationRoots[msg.sender],
+        SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,
-            SLASHER,
-            address(this),
             registrations,
             delegationSignatures,
             delegateePubKey,
             delegateeAddress,
             data
+        );
+
+        // Todo: add seperatr opt-in logic after fraud proof window
+        // Opt in to slasher
+        SlashingLib.optInToSlasher(
+            REGISTRY,
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            SLASHER,
+            address(this),
+            params
         );
     }
 
@@ -634,5 +636,28 @@ contract EigenLayerMiddleware is
     /// @param newRewardsInitiator Address of the new rewards initiator
     function _setRewardsInitiator(address newRewardsInitiator) internal {
         REWARD_INITIATOR = newRewardsInitiator;
+    }
+
+    /// @notice Constructs delegation parameters
+    function _constructDelegationParams(
+        bytes32 registrationRoot,
+        IRegistry.SignedRegistration[] calldata registrations,
+        BLS.G2Point[] calldata delegationSignatures,
+        BLS.G1Point calldata delegateePubKey,
+        address delegateeAddress,
+        bytes[] calldata data
+    )
+        internal
+        view
+        returns (SlashingLib.DelegationParams memory)
+    {
+        return SlashingLib.DelegationParams({
+            registrationRoot: registrationRoot,
+            registrations: registrations,
+            delegationSignatures: delegationSignatures,
+            delegateePubKey: delegateePubKey,
+            delegateeAddress: delegateeAddress,
+            data: data
+        });
     }
 }

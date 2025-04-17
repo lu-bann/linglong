@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
-import { DelegationStore } from "./DelegationStore.sol";
+
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
-
 /// @title SymbioticNetworkStorage
 /// @notice Storage contract for SymbioticNetworkMiddleware
-abstract contract SymbioticNetworkStorage {
+
+abstract contract SymbioticNetworkStorage is ISymbioticNetworkMiddleware {
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     /// @notice Subnetwork ID for validators

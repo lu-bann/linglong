@@ -9,6 +9,8 @@ import { UUPSUpgradeable } from
 import { EIP712Upgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/utils/cryptography/EIP712Upgradeable.sol";
 
+import { ILinglongSlasher } from "../interfaces/ILinglongSlasher.sol";
+
 import { IERC20 } from "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 import { Math } from "@openzeppelin-contracts/contracts/utils/math/Math.sol";
@@ -40,8 +42,9 @@ import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
 import { SlashingLib } from "../libs/SlashingLib.sol";
 import { SymbioticNetworkMiddlewareLib } from "../libs/SymbioticNetworkMiddlewareLib.sol";
-import { DelegationStore } from "../storage/DelegationStore.sol";
 import { SymbioticNetworkStorage } from "../storage/SymbioticNetworkStorage.sol";
+
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
 
 /// @title SymbioticNetworkMiddleware
@@ -269,18 +272,21 @@ contract SymbioticNetworkMiddleware is
         external
         override
     {
-        SlashingLib.optInToSlasher(
-            IRegistry(REGISTRY),
-            operatorDelegations[msg.sender][registrationRoot],
-            operatorRegistrationRoots[msg.sender],
+        SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,
-            address(this),
-            address(this),
             registrations,
             delegationSignatures,
             delegateePubKey,
             delegateeAddress,
             data
+        );
+        SlashingLib.optInToSlasher(
+            IRegistry(REGISTRY),
+            operatorDelegations[msg.sender][registrationRoot],
+            operatorRegistrationRoots[msg.sender],
+            address(this), // TODO: change to slasher address
+            address(this),
+            params
         );
     }
 
@@ -464,5 +470,28 @@ contract SymbioticNetworkMiddleware is
         returns (uint256 power)
     {
         return stake;
+    }
+
+    /// @notice Constructs delegation parameters
+    function _constructDelegationParams(
+        bytes32 registrationRoot,
+        IRegistry.SignedRegistration[] calldata registrations,
+        BLS.G2Point[] calldata delegationSignatures,
+        BLS.G1Point calldata delegateePubKey,
+        address delegateeAddress,
+        bytes[] calldata data
+    )
+        internal
+        view
+        returns (SlashingLib.DelegationParams memory)
+    {
+        return SlashingLib.DelegationParams({
+            registrationRoot: registrationRoot,
+            registrations: registrations,
+            delegationSignatures: delegationSignatures,
+            delegateePubKey: delegateePubKey,
+            delegateeAddress: delegateeAddress,
+            data: data
+        });
     }
 }

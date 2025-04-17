@@ -271,6 +271,13 @@ contract TaiyiRegistryCoordinator is
         return _operatorSets.getOperatorSets32();
     }
 
+    /// @notice Checks if a middleware is a restaking middleware
+    /// @param middleware The middleware address to check
+    /// @return True if the middleware is a restaking middleware, false otherwise
+    function isRestakingMiddleware(address middleware) external view returns (bool) {
+        return restakingProtocolMap.contains(middleware);
+    }
+
     /// @notice Gets all middleware addresses for a specific protocol
     /// @param protocol The protocol type to filter by
     /// @return Array of middleware addresses for the specified protocol
@@ -783,7 +790,6 @@ contract TaiyiRegistryCoordinator is
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         _operatorInfo[operator].operatorId = operatorId;
 
-        console.log("operatorSetIds", operatorSetIds[0]);
         // Use the library function to add operator to sets
         _operatorSets.addOperatorToSets32(
             operatorSetIds, RestakingProtocol.EIGENLAYER, operator

@@ -16,7 +16,3 @@ forge script --rpc-url $EXECUTION_URL \
 -vvvv --broadcast ./script/Deployments.s.sol:Deploy \
 --sig "run(string memory configFile)" \
 -- eigenlayer-deploy-config-devnet.json
-
-forge script --rpc-url $EXECUTION_URL \
--vvvv --broadcast ./script/SetupContract.s.sol:Deploy \
---sig "run()" 

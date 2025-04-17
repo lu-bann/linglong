@@ -3,13 +3,12 @@ pragma solidity ^0.8.27;
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { DelegationStore } from "../storage/DelegationStore.sol";
+import { DelegationStore } from "../types/CommonTypes.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
-import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { BLS } from "@urc/lib/BLS.sol";
