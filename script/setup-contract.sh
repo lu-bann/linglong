@@ -14,6 +14,6 @@ if [ -z "$NETWORK" ]; then
 fi
 export FOUNDRY_PROFILE=ci
 forge script --rpc-url $EXECUTION_URL \
--vvvv --broadcast ./script/Deployments.s.sol:Deploy \
---sig "run(string memory configFile)" \
+-vvvv --broadcast ./script/SetupContract.s.sol:SetupContract \
+--sig "run()" \
 -- eigenlayer-deploy-config-devnet.json
