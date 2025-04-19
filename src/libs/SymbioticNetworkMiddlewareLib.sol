@@ -171,7 +171,7 @@ library SymbioticNetworkMiddlewareLib {
     function calculateSlashAmounts(
         address[] memory vaults,
         address operator,
-        bytes32 subnetwork,
+        uint96 subnetwork,
         uint48 timestamp,
         uint256 amount,
         bytes[] memory slashHints
@@ -189,7 +189,7 @@ library SymbioticNetworkMiddlewareLib {
         // Calculate total stake across all vaults
         for (uint256 i = 0; i < vaults.length; i++) {
             stakes[i] = IBaseDelegator(IVault(vaults[i]).delegator()).stakeAt(
-                subnetwork, operator, timestamp, slashHints[i]
+                bytes32(uint256(subnetwork)), operator, timestamp, slashHints[i]
             );
             totalStake += stakes[i];
         }

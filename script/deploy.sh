@@ -1,4 +1,3 @@
-#! /bin/bash
 if [ -z "$EXECUTION_URL" ]; then
     export EXECUTION_URL="http://localhost:8545"
 fi

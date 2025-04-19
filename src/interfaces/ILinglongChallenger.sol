@@ -44,21 +44,9 @@ interface ILinglongChallenger {
     /// @return isInstant Whether instant slashing is used
     function isInstantSlashing() external view returns (bool isInstant);
 
-    /// @notice Return the operator set ID associated with this challenger
-    /// @return operatorSetId The operator set ID
-    function getOperatorSetId() external view returns (uint32 operatorSetId);
-
     /// @notice Return the amount to slash
     /// @return slashAmount The amount to slash (in WAD)
     function getSlashAmount() external view returns (uint256 slashAmount);
-
-    /// @notice Initiate slashing for an operator
-    /// @param params The slashing parameters
-    /// @return success Whether the operation succeeded
-    /// @return returnData Any return data from the operation
-    function initiateSlashing(IAllocationManager.SlashingParams memory params)
-        external
-        returns (bool success, bytes memory returnData);
 
     /// @notice Check if slashing is in progress for an operator
     /// @param operator The operator address
@@ -67,7 +55,7 @@ interface ILinglongChallenger {
     /// @return slashingId The ID of the slashing
     function isSlashingInProgress(
         address operator,
-        uint32 operatorSetId
+        uint96 operatorSetId
     )
         external
         view
