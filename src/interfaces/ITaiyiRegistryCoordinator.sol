@@ -215,7 +215,7 @@ interface ITaiyiRegistryCoordinator {
     )
         external
         view
-        returns (address);
+        returns (bool);
 
     /// @notice Get the operator set with the specified ID
     /// @param operatorSetId The ID of the operator set
@@ -227,24 +227,7 @@ interface ITaiyiRegistryCoordinator {
     )
         external
         view
-        returns (address);
-    /// @notice Add strategies to an existing operator set
-    /// @param operatorSetId The ID of the operator set
-    /// @param strategies Array of strategy addresses to add
-    function addStrategiesToOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        external;
-
-    /// @notice Remove strategies from an existing operator set
-    /// @param operatorSetId The ID of the operator set
-    /// @param strategies Array of strategy addresses to remove
-    function removeStrategiesFromOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        external;
+        returns (bool);
 
     /// @notice Get all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch

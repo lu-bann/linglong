@@ -250,7 +250,7 @@ contract SymbioticNetworkMiddleware is
         onlyValidatorSubnetwork
     {
         SlashingLib.batchSetDelegations(
-            REGISTRY,
+            IRegistry(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             registrationRoot,
             msg.sender,
@@ -316,7 +316,7 @@ contract SymbioticNetworkMiddleware is
                 super._slashVault(
                     params.timestamp,
                     vaults[i],
-                    params.subnetwork,
+                    bytes32(uint256(params.subnetwork)),
                     operator,
                     slashAmounts[i],
                     params.slashHints[i]
@@ -324,7 +324,7 @@ contract SymbioticNetworkMiddleware is
             }
         }
 
-        emit OperatorSlashed(operator, uint96(uint256(params.subnetwork)), params.amount);
+        emit OperatorSlashed(operator, params.subnetwork, params.amount);
     }
 
     // ==============================================================================================
@@ -344,8 +344,7 @@ contract SymbioticNetworkMiddleware is
         override
         returns (bytes32[] memory)
     {
-        return
-            SlashingLib.getOperatorRegistrationRoots(operatorRegistrationRoots[operator]);
+        return operatorRegistrationRoots[operator].values();
     }
 
     /// @inheritdoc ISymbioticNetworkMiddleware
@@ -362,7 +361,7 @@ contract SymbioticNetworkMiddleware is
         )
     {
         return SlashingLib.getAllDelegations(
-            REGISTRY,
+            IRegistry(REGISTRY),
             operatorDelegations[operator][registrationRoot],
             operator,
             registrationRoot

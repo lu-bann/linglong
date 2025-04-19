@@ -5,6 +5,7 @@ import { TaiyiRegistryCoordinator } from
     "../src/operator-registries/TaiyiRegistryCoordinator.sol";
 import { SymbioticNetworkMiddleware } from
     "../src/symbiotic-network/SymbioticNetworkMiddleware.sol";
+import { EigenlayerDeployer } from "./utils/EigenlayerDeployer.sol";
 import { TransparentUpgradeableProxy } from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import { POCBaseTest } from "@symbiotic-test/POCBase.t.sol";
@@ -18,10 +19,10 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     function setUp() public virtual override {
         address proxyAdmin = makeAddr("proxyAdmin");
         SYMBIOTIC_CORE_PROJECT_ROOT = "lib/middleware-sdk/lib/core/";
-        //super.setUp();
+        super.setUp();
 
-        // // Initialize core protocol components from POCBaseTest
-        // _initializeCoreContracts();
+        // Initialize core protocol components from POCBaseTest
+        _initializeCoreContracts();
 
         // TaiyiRegistryCoordinator registryImpl = new TaiyiRegistryCoordinator();
         // TransparentUpgradeableProxy registryProxy = new TransparentUpgradeableProxy(

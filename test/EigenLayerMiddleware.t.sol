@@ -1,68 +1,63 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.25;
 
+import { EigenlayerDeployer } from "./utils/EigenlayerDeployer.sol";
+import { MockLinglongChallenger } from "./utils/MockChallenger.sol";
 import { ERC20PresetFixedSupplyUpgradeable } from
     "@eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/contracts/token/ERC20/presets/ERC20PresetFixedSupplyUpgradeable.sol";
-
-import { IAllocationManager } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
-import { IPauserRegistry } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IPauserRegistry.sol";
-
 import { IERC20 } from
     "@eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/token/ERC20/IERC20.sol";
+import { IAVSRegistrar } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
+import { IAllocationManager } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+
+import {
+    IAllocationManager,
+    IAllocationManagerTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IDelegationManager } from
     "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 import { IDelegationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
-
-import { IAVSRegistrar } from
-    "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
 import { IEigenPod } from "@eigenlayer-contracts/src/contracts/interfaces/IEigenPod.sol";
 import { IEigenPodTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IEigenPod.sol";
+import { IPauserRegistry } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IPauserRegistry.sol";
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { ISignatureUtils } from
     "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtils.sol";
-import { console } from "forge-std/console.sol";
-
-import {
-    IAllocationManager,
-    IAllocationManagerTypes
-} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import { TransparentUpgradeableProxy } from
+    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { IRegistry } from "@urc/IRegistry.sol";
+import { ISlasher } from "@urc/ISlasher.sol";
+import { Registry } from "@urc/Registry.sol";
+import { BLS } from "@urc/lib/BLS.sol";
+import { StdUtils } from "forge-std/StdUtils.sol";
+import "forge-std/Test.sol";
+import { console } from "forge-std/console.sol";
 import { EigenLayerMiddleware } from "src/eigenlayer-avs/EigenLayerMiddleware.sol";
-
-import { EigenlayerDeployer } from "./utils/EigenlayerDeployer.sol";
-
-import { MockLinglongChallenger } from "./utils/MockChallenger.sol";
+import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol";
 import { ILinglongChallenger } from "src/interfaces/ILinglongChallenger.sol";
 import { IPubkeyRegistry } from "src/interfaces/IPubkeyRegistry.sol";
 
+import { ITaiyiInteractiveChallenger } from
+    "src/interfaces/ITaiyiInteractiveChallenger.sol";
 import { ITaiyiRegistryCoordinator } from "src/interfaces/ITaiyiRegistryCoordinator.sol";
+import { BN254 } from "src/libs/BN254.sol";
+import { OperatorSubsetLib } from "src/libs/OperatorSubsetLib.sol";
 import { PubkeyRegistry } from "src/operator-registries/PubkeyRegistry.sol";
 import { SocketRegistry } from "src/operator-registries/SocketRegistry.sol";
 import { TaiyiRegistryCoordinator } from
     "src/operator-registries/TaiyiRegistryCoordinator.sol";
 import { LinglongSlasher } from "src/slasher/LinglongSlasher.sol";
-
-import { BLS } from "@urc/lib/BLS.sol";
-import { StdUtils } from "forge-std/StdUtils.sol";
-import "forge-std/Test.sol";
-import { BN254 } from "src/libs/BN254.sol";
-
-import { IRegistry } from "@urc/IRegistry.sol";
-import { ISlasher } from "@urc/ISlasher.sol";
-import { Registry } from "@urc/Registry.sol";
-
-import { TransparentUpgradeableProxy } from
-    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { OperatorSubsetLib } from "src/libs/OperatorSubsetLib.sol";
 
 contract EigenlayerMiddlewareTest is Test {
     using OperatorSubsetLib for uint32;
@@ -84,6 +79,7 @@ contract EigenlayerMiddlewareTest is Test {
     LinglongSlasher public slasher;
     address public challenger;
     address public proxyAdmin;
+    uint256 public registrationMinCollateral;
 
     uint256 constant STAKE_AMOUNT = 32 ether;
     uint256 constant UNDERWRITER_SHARE_BIPS = 8000; // 80%
@@ -97,14 +93,14 @@ contract EigenlayerMiddlewareTest is Test {
         vm.stopPrank();
     }
 
+    // ==============================================================================================
+    // =========================================== SETUP ============================================
+    // ==============================================================================================
+
     /// @notice Performs initial setup for the test environment by deploying and initializing contracts
     function setUp() public {
         proxyAdmin = makeAddr("proxyAdmin");
 
-        // Deploy EigenLayer and create test accounts
-        _setupEigenLayerAndAccounts();
-
-        // Deploy core infrastructure
         registry = new Registry(
             IRegistry.Config({
                 minCollateralWei: 0.1 ether,
@@ -114,29 +110,146 @@ contract EigenlayerMiddlewareTest is Test {
                 optInDelay: 7200
             })
         );
+        _setupEigenLayerAndAccounts();
         _deployTaiyiRegistryCoordinator();
         _deployLinglongSlasher();
         _setupRegistryCoordinatorRegistries();
-
-        // Configure middleware connections
         _deployEigenLayerMiddleware();
         _configureMiddlewareConnections();
-
-        // Configure challenger and slashing
         _setupChallenger();
-
-        // Create operator set in AllocationManager
         _createOperatorSet();
 
         console.log("Setup complete");
     }
+
+    // ==============================================================================================
+    // =========================================== TESTS ============================================
+    // ==============================================================================================
+
+    function testOperatorRegistrationFlow() public {
+        // 1. Setup and verify operator set
+        OperatorSet memory opSet;
+        opSet.id = operatorSetId;
+        opSet.avs = eigenLayerMiddleware;
+        _verifyOperatorSetExists(opSet);
+
+        // 2. Register operator
+        bytes memory extraData = abi.encode(operatorBLSPubKey);
+        _registerOperator(operator, operatorSetId, extraData);
+
+        // 3. Verify registration
+        _verifyOperatorRegistrationInEigenLayer(operator);
+
+        // 4. Verify allocation
+        IStrategy[] memory strategies = _verifyOperatorAllocation(operator, opSet);
+
+        // 5. Verify operator set membership
+        _verifyOperatorInOperatorSet(operator, opSet);
+
+        // 6. Verify stake
+        _verifyOperatorStake(operator);
+
+        // 7. Remove strategies
+        _removeStrategiesAndVerify(operatorSetId, strategies, opSet);
+
+        // 8. Test deregistration
+        _deregisterFromAVS(operator, operatorSetId);
+        _verifyDeregistration(operator, opSet);
+
+        // 9. Create new operator set and verify count
+        _createOperatorSet();
+        uint32 count = middleware.getOperatorSetCount();
+        assertEq(count, 2, "Should have 2 operator sets");
+    }
+
+    function testValidatorRegistration() public {
+        // Setup operators and give them funds
+        (address primaryOp, address underwriterOp,,) = _setupOperatorsWithFunds();
+
+        // Create BLS keys and register operators
+        _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
+
+        // Setup mocks and complete test
+        _verifyOperatorRegistration(primaryOp, underwriterOp);
+
+        // Todo: silence this for the CI
+        // Register the validator
+        //bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
+    }
+
+    // function testSlashOperator() public {
+    //     // Setup operators and give them funds
+    //     (
+    //         address primaryOp,
+    //         address underwriterOp,
+    //         uint256 primaryOpKey,
+    //         uint256 underwriterOpKey
+    //     ) = _setupOperatorsWithFunds();
+
+    //     // Create BLS keys and register operators
+    //     _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
+
+    //     // Verify operator registration
+    //     _verifyOperatorRegistration(primaryOp, underwriterOp);
+
+    //     // Register validator and complete opt-in to slasher
+    //     //bytes32 registrationRoot = _setupValidatorWithSlasher(primaryOp, underwriterOp);
+    //     bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
+
+    //     // Create a mock commitment for slashing
+    //     ISlasher.SignedCommitment memory commitment = _createMockCommitment(
+    //         registrationRoot, primaryOp, underwriterOp, primaryOpKey, underwriterOpKey
+    //     );
+
+    //     // Create evidence bytes
+    //     bytes memory evidence = abi.encode("mock evidence data");
+
+    //     challenger = address(new MockLinglongChallenger());
+
+    //     // Make sure the challenger is set up
+    //     vm.startPrank(owner);
+    //     slasher.registerChallenger(challenger);
+    //     slasher.setURCCommitmentTypeToViolationType(
+    //         COMMITMENT_TYPE_URC, VIOLATION_TYPE_URC
+    //     );
+    //     vm.stopPrank();
+
+    //     // Set up the challenger for instant slashing to simplify testing
+    //     MockLinglongChallenger(challenger).setIsInstantSlashing(true);
+
+    //     // Mock necessary functions for slashing to work
+    //     vm.startPrank(owner);
+    //     slasher.setEigenLayerMiddleware(eigenLayerMiddleware);
+    //     slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
+    //     vm.stopPrank();
+
+    //     // Perform the slashing via the Registry
+    //     vm.startPrank(challenger);
+    //     uint256 slashAmount =
+    //         registry.slashCommitment(registrationRoot, commitment, evidence);
+    //     vm.stopPrank();
+
+    //     // Verify the slashing was successful
+    //     assertTrue(registry.isSlashed(registrationRoot), "Operator should be slashed");
+    //     assertEq(
+    //         registry.getOperatorData(registrationRoot).slashedAt > 0,
+    //         true,
+    //         "Slashing timestamp should be set"
+    //     );
+
+    //     console.log("Slashing successful with amount:", slashAmount);
+    // }
+
+    // ==============================================================================================
+    // ====================================== SETUP HELPERS ========================================
+    // ==============================================================================================
 
     /// @dev Deploy a real EigenLayerMiddleware contract
     function _deployEigenLayerMiddleware() internal {
         // Get the owner address for AllocationManager to ensure we have the right permissions
         address allocationManagerOwner = eigenLayerDeployer.allocationManager().owner();
         console.log("AllocationManager owner:", allocationManagerOwner);
-        console.log("Our owner:", owner);
+        console.log("Test owner:", owner);
 
         vm.startPrank(owner);
 
@@ -144,20 +257,26 @@ contract EigenlayerMiddlewareTest is Test {
         console.log("Deploying middleware implementation");
         EigenLayerMiddleware middlewareImpl = new EigenLayerMiddleware();
 
+        // Set the registration min collateral to 0.11 ETH
+        registrationMinCollateral = 0.11 ether;
+
         // Prepare initialization data
         console.log("Preparing initialization data");
         bytes memory initData = abi.encodeWithSelector(
             EigenLayerMiddleware.initialize.selector,
             owner, // _owner
-            address(eigenLayerDeployer.avsDirectory()), // _avsDirectory
-            address(eigenLayerDeployer.delegation()), // _delegationManager
-            address(eigenLayerDeployer.rewardsCoordinator()), // _rewardCoordinator
-            rewardsInitiator, // _rewardInitiator
-            address(registryCoordinator), // _registryCoordinator
-            UNDERWRITER_SHARE_BIPS, // _underwriterShareBips
-            address(registry), // _registry
-            address(slasher), // _slasher
-            address(eigenLayerDeployer.allocationManager()) // _allocationManager
+            IEigenLayerMiddleware.Config({
+                avsDirectory: address(eigenLayerDeployer.avsDirectory()),
+                delegationManager: address(eigenLayerDeployer.delegation()),
+                rewardCoordinator: address(eigenLayerDeployer.rewardsCoordinator()),
+                rewardInitiator: rewardsInitiator,
+                registryCoordinator: address(registryCoordinator),
+                underwriterShareBips: UNDERWRITER_SHARE_BIPS,
+                registry: address(registry),
+                slasher: address(slasher),
+                allocationManager: address(eigenLayerDeployer.allocationManager()),
+                registrationMinCollateral: registrationMinCollateral
+            })
         );
 
         // Deploy and initialize proxy
@@ -170,239 +289,6 @@ contract EigenlayerMiddlewareTest is Test {
         console.log("Middleware deployed at:", eigenLayerMiddleware);
 
         vm.stopPrank();
-    }
-
-    function testOperatorRegistrationFlow() public {
-        OperatorSet memory opSet;
-        opSet.id = operatorSetId;
-        opSet.avs = eigenLayerMiddleware;
-        assertTrue(
-            eigenLayerDeployer.allocationManager().isOperatorSet(opSet),
-            "Operator set should exist"
-        );
-
-        // 2. Register the operator in EigenLayer, allocate stake, and register for operator set
-        bytes memory extraData = abi.encode(operatorBLSPubKey);
-        _registerCompleteOperator(operator, operatorSetId, extraData);
-
-        // 3. Verify the registration was successful
-
-        // Check operator is registered in EigenLayer
-        assertTrue(
-            eigenLayerDeployer.delegation().isOperator(operator),
-            "Operator should be registered in EigenLayer"
-        );
-
-        // Check operator has allocated stake to the operator set
-        IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
-
-        assertTrue(
-            allocationManager.isMemberOfOperatorSet(operator, opSet),
-            "Operator should be a member of the operator set"
-        );
-
-        // Check operator's allocation from each strategy to the operator set
-        IStrategy[] memory strategies =
-            allocationManager.getStrategiesInOperatorSet(opSet);
-        assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
-
-        IAllocationManagerTypes.Allocation memory allocation =
-            allocationManager.getAllocation(operator, opSet, strategies[0]);
-
-        assertEq(allocation.currentMagnitude, uint64(_WAD), "Wrong allocation magnitude");
-        assertEq(int256(allocation.pendingDiff), 0, "Should have no pending diff");
-
-        // Check operator is registered in the operator set
-        address[] memory members = allocationManager.getMembers(opSet);
-        bool operatorFound = false;
-        for (uint256 i = 0; i < members.length; i++) {
-            if (members[i] == operator) {
-                operatorFound = true;
-                break;
-            }
-        }
-        assertTrue(operatorFound, "Operator should be found in operator set members");
-
-        // 4. Test deregistration
-        // Todo: use TaiyiRegistryCoordinator.deregisterOperator()
-        _deregisterFromAVS(operator, operatorSetId);
-
-        // The operator should be marked as deregistered (but still slashable)
-        assertFalse(
-            allocationManager.isMemberOfOperatorSet(operator, opSet),
-            "Operator should no longer be a member of the operator set after deregistration"
-        );
-
-        // Check the operator is still in the allocated sets (deallocation pending)
-        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(operator);
-        bool stillAllocated = false;
-        for (uint256 i = 0; i < allocatedSets.length; i++) {
-            if (
-                allocatedSets[i].id == operatorSetId
-                    && allocatedSets[i].avs == eigenLayerMiddleware
-            ) {
-                stillAllocated = true;
-                break;
-            }
-        }
-        assertTrue(
-            stillAllocated,
-            "Operator should still have allocations during deallocation delay"
-        );
-    }
-
-    function testValidatorRegistration() public {
-        // Setup operators and give them funds
-        (address primaryOp, address underwriterOp) = _setupOperatorsWithFunds();
-
-        // Create BLS keys and register operators
-        _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
-
-        // Setup mocks and complete test
-        _verifyOperatorRegistration(primaryOp, underwriterOp);
-
-        // Todo: silence this for the CI
-        // Register the validator
-        // _validatorRegistration(primaryOp, underwriterOp);
-    }
-
-    /// @dev Setup operators and give them ETH and WETH
-    function _setupOperatorsWithFunds()
-        internal
-        returns (address primaryOp, address underwriterOp)
-    {
-        primaryOp = makeAddr("primaryOperator");
-        underwriterOp = makeAddr("underwriterOperator");
-
-        // Give ETH to the operators
-        vm.deal(primaryOp, 100 ether);
-        vm.deal(underwriterOp, 100 ether);
-
-        // Important: Transfer WETH to operators for staking
-        vm.startPrank(address(eigenLayerDeployer));
-        eigenLayerDeployer.weth().transfer(primaryOp, 100 ether);
-        eigenLayerDeployer.weth().transfer(underwriterOp, 100 ether);
-        vm.stopPrank();
-
-        return (primaryOp, underwriterOp);
-    }
-
-    /// @dev Create different BLS pubkeys and register operators
-    function _registerOperatorsWithUniqueKeys(
-        address primaryOp,
-        address underwriterOp
-    )
-        internal
-    {
-        // Create different BLS pubkeys for each operator
-        bytes memory primaryOpBLSPubKey = new bytes(48);
-        for (uint256 i = 0; i < 48; i++) {
-            primaryOpBLSPubKey[i] = 0xaa; // Different value from the default 0xab
-        }
-
-        bytes memory underwriterOpBLSPubKey = new bytes(48);
-        for (uint256 i = 0; i < 48; i++) {
-            underwriterOpBLSPubKey[i] = 0xcc; // Different value from both default and primaryOp
-        }
-
-        // Register operators with different BLS pubkeys
-        _registerCompleteOperator(
-            primaryOp, operatorSetId, abi.encode(primaryOpBLSPubKey)
-        );
-        _registerCompleteOperator(
-            underwriterOp, operatorSetId, abi.encode(underwriterOpBLSPubKey)
-        );
-    }
-
-    /// @dev Create test registrations
-    function _createRegistrations()
-        internal
-        pure
-        returns (IRegistry.SignedRegistration[] memory)
-    {
-        IRegistry.SignedRegistration[] memory registrations =
-            new IRegistry.SignedRegistration[](2);
-
-        // Example BLS public keys and signatures
-        for (uint256 i = 0; i < 2; i++) {
-            // Create a mock BLS public key
-            BLS.G1Point memory pubkey;
-            pubkey.x.a = uint256(i + 1);
-            pubkey.x.b = 0;
-            pubkey.y.a = uint256(i + 10);
-            pubkey.y.b = 0;
-
-            // Create a mock BLS signature
-            BLS.G2Point memory signature;
-            signature.x.c0.a = uint256(i + 100);
-            signature.x.c0.b = 0;
-            signature.x.c1.a = uint256(i + 101);
-            signature.x.c1.b = 0;
-            signature.y.c0.a = uint256(i + 200);
-            signature.y.c0.b = 0;
-            signature.y.c1.a = uint256(i + 201);
-            signature.y.c1.b = 0;
-
-            registrations[i] =
-                IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
-        }
-
-        return registrations;
-    }
-
-    /// @dev Setup mocks for registry interactions and verify
-    function _verifyOperatorRegistration(
-        address primaryOp,
-        address underwriterOp
-    )
-        internal
-        view
-    {
-        // Verify the registration was successful in both EigenLayer and TaiyiRegistryCoordinator
-
-        // 1. Check the operators are registered with TaiyiRegistryCoordinator
-        // Using uint8 instead of enum to avoid compilation issues
-        uint8 primaryOpStatus = uint8(registryCoordinator.getOperatorStatus(primaryOp));
-        uint8 underwriterOpStatus =
-            uint8(registryCoordinator.getOperatorStatus(underwriterOp));
-
-        // OperatorStatus.REGISTERED == 1
-        assertTrue(
-            primaryOpStatus == 1,
-            "Primary operator should be registered with TaiyiRegistryCoordinator"
-        );
-        assertTrue(
-            underwriterOpStatus == 1,
-            "Underwriter operator should be registered with TaiyiRegistryCoordinator"
-        );
-
-        // 2. Verify they are members of the operatorSet
-        (, uint32 opSetId) = operatorSetId.decodeOperatorSetId32();
-        address[] memory opSetMembers =
-            registryCoordinator.getEigenLayerOperatorSetOperators(opSetId);
-
-        bool primaryOpFound = false;
-        bool underwriterOpFound = false;
-
-        for (uint256 i = 0; i < opSetMembers.length; i++) {
-            if (opSetMembers[i] == primaryOp) {
-                primaryOpFound = true;
-            }
-            if (opSetMembers[i] == underwriterOp) {
-                underwriterOpFound = true;
-            }
-        }
-
-        assertTrue(
-            primaryOpFound, "Primary operator should be a member of the operator set"
-        );
-        assertTrue(
-            underwriterOpFound,
-            "Underwriter operator should be a member of the operator set"
-        );
-
-        // Log success message
-        console.log("Operators successfully registered with TaiyiRegistryCoordinator");
     }
 
     /// @dev Setup EigenLayer and create test accounts with initial balances
@@ -545,11 +431,202 @@ contract EigenlayerMiddlewareTest is Test {
         opSet.avs = eigenLayerMiddleware;
 
         bool exists = eigenLayerDeployer.allocationManager().isOperatorSet(opSet);
-        console.log("Operator set exists:", exists);
+        assertTrue(exists, "Operator set should exist");
     }
 
-    // Full EigenLayer and AVS registration flow
-    function _registerCompleteOperator(
+    /// @dev Setup operators and give them ETH and WETH
+    function _setupOperatorsWithFunds()
+        internal
+        returns (
+            address primaryOp,
+            address underwriterOp,
+            uint256 primaryOpKey,
+            uint256 underwriterOpKey
+        )
+    {
+        (primaryOp, primaryOpKey) = makeAddrAndKey("primaryOperator");
+        (underwriterOp, underwriterOpKey) = makeAddrAndKey("underwriterOperator");
+
+        // Give ETH to the operators
+        vm.deal(primaryOp, 100 ether);
+        vm.deal(underwriterOp, 100 ether);
+
+        // Important: Transfer WETH to operators for staking
+        vm.startPrank(address(eigenLayerDeployer));
+        eigenLayerDeployer.weth().transfer(primaryOp, 100 ether);
+        eigenLayerDeployer.weth().transfer(underwriterOp, 100 ether);
+        vm.stopPrank();
+
+        return (primaryOp, underwriterOp, primaryOpKey, underwriterOpKey);
+    }
+
+    // ==============================================================================================
+    // ====================================== TEST HELPERS =========================================
+    // ==============================================================================================
+
+    function _verifyOperatorSetExists(OperatorSet memory opSet) internal {
+        assertTrue(
+            eigenLayerDeployer.allocationManager().isOperatorSet(opSet),
+            "Operator set should exist"
+        );
+    }
+
+    function _verifyOperatorRegistrationInEigenLayer(address operator) internal {
+        assertTrue(
+            eigenLayerDeployer.delegation().isOperator(operator),
+            "Operator should be registered in EigenLayer"
+        );
+    }
+
+    function _verifyOperatorAllocation(
+        address operator,
+        OperatorSet memory opSet
+    )
+        internal
+        returns (IStrategy[] memory)
+    {
+        IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
+        assertTrue(
+            allocationManager.isMemberOfOperatorSet(operator, opSet),
+            "Operator should be a member of the operator set"
+        );
+
+        // Check operator's allocation from each strategy to the operator set
+        IStrategy[] memory strategies =
+            allocationManager.getStrategiesInOperatorSet(opSet);
+        assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
+
+        IAllocationManagerTypes.Allocation memory allocation =
+            allocationManager.getAllocation(operator, opSet, strategies[0]);
+
+        assertEq(allocation.currentMagnitude, uint64(_WAD), "Wrong allocation magnitude");
+        assertEq(int256(allocation.pendingDiff), 0, "Should have no pending diff");
+
+        return strategies;
+    }
+
+    function _verifyOperatorInOperatorSet(
+        address operator,
+        OperatorSet memory opSet
+    )
+        internal
+    {
+        IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
+        address[] memory members = allocationManager.getMembers(opSet);
+        bool operatorFound = false;
+        for (uint256 i = 0; i < members.length; i++) {
+            if (members[i] == operator) {
+                operatorFound = true;
+                break;
+            }
+        }
+        assertTrue(operatorFound, "Operator should be found in operator set members");
+
+        // Check the operator is in the operator set from the registry coordinator
+        (, uint32 baseOperatorSetId) = opSet.id.decodeOperatorSetId32();
+        assertTrue(
+            registryCoordinator.getEigenLayerOperatorFromOperatorSet(
+                baseOperatorSetId, operator
+            ),
+            "Operator should be in the operator set"
+        );
+        assertEq(baseOperatorSetId, uint32(0), "Operator set ID should match");
+    }
+
+    function _verifyOperatorStake(address operator) internal {
+        (IStrategy[] memory strategies, uint256[] memory stakeAmounts) =
+            middleware.getStrategiesAndStakes(operator);
+        assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
+        assertEq(
+            stakeAmounts[0], STAKE_AMOUNT, "Should have 1 stake amount in operator set"
+        );
+
+        uint32 count = middleware.getOperatorSetCount();
+        assertEq(count, 1, "Should have 1 operator set");
+    }
+
+    function _verifyOperatorRegistration(
+        address primaryOp,
+        address underwriterOp
+    )
+        internal
+        view
+    {
+        // Verify the registration was successful in both EigenLayer and TaiyiRegistryCoordinator
+
+        // 1. Check the operators are registered with TaiyiRegistryCoordinator
+        // Using uint8 instead of enum to avoid compilation issues
+        uint8 primaryOpStatus = uint8(registryCoordinator.getOperatorStatus(primaryOp));
+        uint8 underwriterOpStatus =
+            uint8(registryCoordinator.getOperatorStatus(underwriterOp));
+
+        // OperatorStatus.REGISTERED == 1
+        assertTrue(
+            primaryOpStatus == 1,
+            "Primary operator should be registered with TaiyiRegistryCoordinator"
+        );
+        assertTrue(
+            underwriterOpStatus == 1,
+            "Underwriter operator should be registered with TaiyiRegistryCoordinator"
+        );
+
+        // 2. Verify they are members of the operatorSet
+        (, uint32 opSetId) = operatorSetId.decodeOperatorSetId32();
+        address[] memory opSetMembers =
+            registryCoordinator.getEigenLayerOperatorSetOperators(opSetId);
+
+        bool primaryOpFound = false;
+        bool underwriterOpFound = false;
+
+        for (uint256 i = 0; i < opSetMembers.length; i++) {
+            if (opSetMembers[i] == primaryOp) {
+                primaryOpFound = true;
+            }
+            if (opSetMembers[i] == underwriterOp) {
+                underwriterOpFound = true;
+            }
+        }
+
+        assertFalse(
+            primaryOpFound,
+            "Primary operator should not be a member of the underwriter operator set"
+        );
+        assertTrue(
+            underwriterOpFound,
+            "Underwriter operator should be a member of the underwriter operator set"
+        );
+    }
+
+    function _verifyDeregistration(address operator, OperatorSet memory opSet) internal {
+        IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
+        assertFalse(
+            allocationManager.isMemberOfOperatorSet(operator, opSet),
+            "Operator should no longer be a member of the operator set after deregistration"
+        );
+
+        // Check the operator is still in the allocated sets (deallocation pending)
+        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(operator);
+        bool stillAllocated = false;
+        for (uint256 i = 0; i < allocatedSets.length; i++) {
+            if (
+                allocatedSets[i].id == operatorSetId
+                    && allocatedSets[i].avs == eigenLayerMiddleware
+            ) {
+                stillAllocated = true;
+                break;
+            }
+        }
+        assertTrue(
+            stillAllocated,
+            "Operator should still have allocations during deallocation delay"
+        );
+    }
+
+    // ==============================================================================================
+    // ==================================== REGISTRATION ============================================
+    // ==============================================================================================
+
+    function _registerOperator(
         address _operator,
         uint32 _opSetId,
         bytes memory extraData
@@ -569,7 +646,6 @@ contract EigenlayerMiddlewareTest is Test {
         _registerForOperatorSets(_operator, _opSetId, extraData);
     }
 
-    // Helper function to register an operator in EigenLayer
     function _registerOperatorInEigenLayer(address _operator) internal {
         // First register the operator with EigenLayer
         vm.startPrank(_operator);
@@ -581,7 +657,35 @@ contract EigenlayerMiddlewareTest is Test {
         vm.stopPrank();
     }
 
-    // Helper function to stake ETH to get active stake in EigenLayer
+    function _registerOperatorsWithUniqueKeys(
+        address primaryOp,
+        address underwriterOp
+    )
+        internal
+    {
+        bytes memory primaryOpBLSPubKey = new bytes(48);
+        for (uint256 i = 0; i < 48; i++) {
+            primaryOpBLSPubKey[i] = 0xaa; // Different value from the default 0xab
+        }
+
+        bytes memory underwriterOpBLSPubKey = new bytes(48);
+        for (uint256 i = 0; i < 48; i++) {
+            underwriterOpBLSPubKey[i] = 0xcc; // Different value from both default and primaryOp
+        }
+
+        // Register operators with different BLS pubkeys
+        _registerOperator(primaryOp, operatorSetId, abi.encode(primaryOpBLSPubKey));
+        // Add unerwrite operator set
+        _createOperatorSet();
+        _registerOperator(
+            underwriterOp, operatorSetId, abi.encode(underwriterOpBLSPubKey)
+        );
+    }
+
+    // ==============================================================================================
+    // ==================================== STAKING & ALLOCATION ====================================
+    // ==============================================================================================
+
     function _stakeIntoEigenLayer(
         address _staker,
         uint256 amount
@@ -600,7 +704,6 @@ contract EigenlayerMiddlewareTest is Test {
         );
     }
 
-    // Helper function to allocate stake to an AVS (step 1 of AVS opt-in)
     function _allocateStakeToAVS(
         address _operator,
         uint32 _opSetId
@@ -652,7 +755,6 @@ contract EigenlayerMiddlewareTest is Test {
         eigenLayerDeployer.allocationManager().modifyAllocations(_operator, allocParams);
     }
 
-    // Helper function to register for operator sets (step 2 of AVS opt-in)
     function _registerForOperatorSets(
         address _operator,
         uint32 _opSetId,
@@ -716,7 +818,25 @@ contract EigenlayerMiddlewareTest is Test {
         );
     }
 
-    // Helper function to test operator opt-out/deregistration from AVS
+    function _removeStrategiesAndVerify(
+        uint32 operatorSetId,
+        IStrategy[] memory strategies,
+        OperatorSet memory opSet
+    )
+        internal
+    {
+        IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
+        vm.startPrank(owner);
+        middleware.removeStrategiesFromOperatorSet(operatorSetId, strategies);
+        vm.stopPrank();
+
+        IStrategy[] memory remainingStrategies =
+            allocationManager.getStrategiesInOperatorSet(opSet);
+        assertEq(
+            remainingStrategies.length, 0, "Should have 0 strategies in operator set"
+        );
+    }
+
     function _deregisterFromAVS(
         address _operator,
         uint32 _opSetId
@@ -736,16 +856,17 @@ contract EigenlayerMiddlewareTest is Test {
         eigenLayerDeployer.allocationManager().deregisterFromOperatorSets(params);
     }
 
-    // Helper function to convert a single uint32 to a uint32[] array
-    function _uint32ToArray(uint32 value) internal pure returns (uint32[] memory) {
-        uint32[] memory array = new uint32[](1);
-        array[0] = value;
-        return array;
-    }
+    // ==============================================================================================
+    // ==================================== VALIDATOR HELPER ========================================
+    // ==============================================================================================
 
-    function _validatorRegistration(address primaryOp, address underwriterOp) internal {
-        console.log("Starting validator registration for operator:", primaryOp);
-
+    function _validatorRegistration(
+        address primaryOp,
+        address underwriterOp
+    )
+        internal
+        returns (bytes32)
+    {
         // Create BLS keys and signatures for registration
         uint256 validatorPrivKey1 = 12_345; // Use a deterministic private key for testing
         uint256 validatorPrivKey2 = 67_890; // Second validator key
@@ -757,18 +878,64 @@ contract EigenlayerMiddlewareTest is Test {
         registrations[0] = _createRegistration(validatorPrivKey1, primaryOp);
         registrations[1] = _createRegistration(validatorPrivKey2, primaryOp);
 
-        // Create delegatee information (usually the underwriter operator)
-        address delegateeAddress = underwriterOp;
+        // Generate delegatee information (usually the underwriter operator)
+        uint256 delegateePrivKey = 69_420;
 
-        // Generate delegatee pubkey
-        uint256 delegateePrivKey = 9876;
+        // Register validators and get registration root
+        bytes32 registrationRoot = _registerValidatorsWithRoot(primaryOp, registrations);
+
+        // Complete opt-in to slasher with delegation
+        _completeOptInToSlasher(
+            primaryOp, registrationRoot, registrations, delegateePrivKey, underwriterOp
+        );
+
+        return registrationRoot;
+    }
+
+    function _registerValidatorsWithRoot(
+        address primaryOp,
+        IRegistry.SignedRegistration[] memory registrations
+    )
+        internal
+        returns (bytes32)
+    {
+        // Start prank as the primary operator to register validators
+        vm.startPrank(primaryOp);
+
+        // Ensure the operator has enough ETH for collateral
+        // The middleware sends 0.11 ETH per validator to the Registry
+        uint256 requiredCollateral = registrationMinCollateral * registrations.length;
+        vm.deal(primaryOp, requiredCollateral + 2 ether); // Add extra ETH for gas
+
+        // Call registerValidators function with value
+        bytes32 registrationRoot =
+            middleware.registerValidators{ value: requiredCollateral }(registrations);
+
+        vm.stopPrank();
+
+        return registrationRoot;
+    }
+
+    function _completeOptInToSlasher(
+        address primaryOp,
+        bytes32 registrationRoot,
+        IRegistry.SignedRegistration[] memory registrations,
+        uint256 delegateePrivKey,
+        address delegateeAddress
+    )
+        internal
+    {
+        // Create delegatee pubkey
         BLS.G1Point memory delegateePubKey = BLS.toPublicKey(delegateePrivKey);
 
         // Create delegation signatures for each validator
         BLS.G2Point[] memory delegationSignatures = new BLS.G2Point[](2);
 
-        // Usually these signatures would be signing a delegation message
-        // that includes the delegatee's pubkey and the committer's address
+        // Get the validator private keys used earlier in registration
+        uint256 validatorPrivKey1 = 12_345;
+        uint256 validatorPrivKey2 = 67_890;
+
+        // Generate signatures
         delegationSignatures[0] = _createDelegationSignature(
             validatorPrivKey1, delegateePubKey, delegateeAddress
         );
@@ -781,24 +948,7 @@ contract EigenlayerMiddlewareTest is Test {
         data[0] = abi.encode("validator-1-metadata");
         data[1] = abi.encode("validator-2-metadata");
 
-        // Start prank as the primary operator to register validators
         vm.startPrank(primaryOp);
-
-        // Ensure the operator has enough ETH for collateral
-        // The middleware sends 0.11 ETH per validator to the Registry
-        uint256 requiredCollateral = 0.11 ether * registrations.length;
-        vm.deal(primaryOp, requiredCollateral + 2 ether); // Add extra ETH for gas
-
-        // Log the balance for debugging
-        console.log(
-            "Primary operator ETH balance before registration:", primaryOp.balance
-        );
-        console.log("Required collateral for registration:", requiredCollateral);
-
-        // Call registerValidators function with value
-        bytes32 registrationRoot = middleware.registerValidators{
-            value: requiredCollateral
-        }(registrations, delegationSignatures, delegateePubKey, delegateeAddress, data);
 
         // Wait for the fraud proof window to pass
         vm.roll(block.number + 100 days);
@@ -813,11 +963,42 @@ contract EigenlayerMiddlewareTest is Test {
             data
         );
 
-        vm.stopPrank();
-
         assertEq(middleware.getOperatorDelegationsCount(primaryOp, registrationRoot), 2);
 
-        console.log("Validator registration completed successfully");
+        // Get pubkeys and delegations separately to avoid stack issues
+        _verifyAndSetDelegations(primaryOp, registrationRoot, registrations);
+
+        vm.stopPrank();
+    }
+
+    function _verifyAndSetDelegations(
+        address primaryOp,
+        bytes32 registrationRoot,
+        IRegistry.SignedRegistration[] memory registrations
+    )
+        internal
+    {
+        // Start prank as the primary operator
+        vm.startPrank(primaryOp);
+
+        // Get delegations
+        (BLS.G1Point[] memory pubkeys, ISlasher.SignedDelegation[] memory delegations) =
+            middleware.getAllDelegations(primaryOp, registrationRoot);
+
+        // Verify pubkeys match
+        assertEq(
+            keccak256(abi.encode(pubkeys[0])),
+            keccak256(abi.encode(registrations[0].pubkey))
+        );
+        assertEq(
+            keccak256(abi.encode(pubkeys[1])),
+            keccak256(abi.encode(registrations[1].pubkey))
+        );
+
+        // Set delegations
+        middleware.batchSetDelegations(registrationRoot, pubkeys, delegations);
+
+        vm.stopPrank();
     }
 
     function _createRegistration(
@@ -835,7 +1016,6 @@ contract EigenlayerMiddlewareTest is Test {
         return IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
     }
 
-    // Helper function to create registration signatures
     function _createRegistrationSignature(
         uint256 secretKey,
         address ownerAddress
@@ -849,7 +1029,6 @@ contract EigenlayerMiddlewareTest is Test {
         return BLS.sign(message, secretKey, registry.REGISTRATION_DOMAIN_SEPARATOR());
     }
 
-    // Helper function to create delegation signatures
     function _createDelegationSignature(
         uint256 validatorSecretKey,
         BLS.G1Point memory delegatePubKey,
@@ -874,5 +1053,112 @@ contract EigenlayerMiddlewareTest is Test {
             validatorSecretKey,
             registry.DELEGATION_DOMAIN_SEPARATOR()
         );
+    }
+
+    function _createRegistrations()
+        internal
+        pure
+        returns (IRegistry.SignedRegistration[] memory)
+    {
+        IRegistry.SignedRegistration[] memory registrations =
+            new IRegistry.SignedRegistration[](2);
+
+        // Example BLS public keys and signatures
+        for (uint256 i = 0; i < 2; i++) {
+            // Create a mock BLS public key
+            BLS.G1Point memory pubkey;
+            pubkey.x.a = uint256(i + 1);
+            pubkey.x.b = 0;
+            pubkey.y.a = uint256(i + 10);
+            pubkey.y.b = 0;
+
+            // Create a mock BLS signature
+            BLS.G2Point memory signature;
+            signature.x.c0.a = uint256(i + 100);
+            signature.x.c0.b = 0;
+            signature.x.c1.a = uint256(i + 101);
+            signature.x.c1.b = 0;
+            signature.y.c0.a = uint256(i + 200);
+            signature.y.c0.b = 0;
+            signature.y.c1.a = uint256(i + 201);
+            signature.y.c1.b = 0;
+
+            registrations[i] =
+                IRegistry.SignedRegistration({ pubkey: pubkey, signature: signature });
+        }
+
+        return registrations;
+    }
+
+    // ==============================================================================================
+    // ==================================== UTILITY FUNCTIONS =======================================
+    // ==============================================================================================
+
+    function _uint32ToArray(uint32 value) internal pure returns (uint32[] memory) {
+        uint32[] memory array = new uint32[](1);
+        array[0] = value;
+        return array;
+    }
+
+    function _createMockCommitment(
+        bytes32 registrationRoot,
+        address primaryOp,
+        address underwriterOp,
+        uint256 primaryOpKey,
+        uint256 underwriterOpKey
+    )
+        internal
+        returns (ISlasher.SignedCommitment memory)
+    {
+        // Create a challenge struct that the slasher expects
+        ITaiyiInteractiveChallenger.Challenge memory challenge =
+        ITaiyiInteractiveChallenger.Challenge({
+            id: bytes32(uint256(1234)),
+            createdAt: block.timestamp,
+            challenger: challenger,
+            commitmentSigner: primaryOp,
+            status: ITaiyiInteractiveChallenger.ChallengeStatus.Open,
+            preconfType: 0,
+            commitmentData: new bytes(0),
+            signature: new bytes(0)
+        });
+
+        // Encode the challenge properly - note the double encoding that slasher expects
+        bytes memory payload = abi.encode(abi.encode(challenge));
+
+        // Create a commitment that points to our slasher
+        ISlasher.Commitment memory commitment = ISlasher.Commitment({
+            slasher: address(slasher),
+            commitmentType: COMMITMENT_TYPE_URC,
+            payload: payload
+        });
+
+        // Generate signature
+        (uint8 v, bytes32 r, bytes32 s) =
+            vm.sign(primaryOpKey, keccak256(abi.encode(commitment)));
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // Update the slasher's committer mapping to recognize this address
+        // vm.startPrank(address(middleware));
+        // registry.optInToSlasher(registrationRoot, address(slasher), underwriter);
+        // vm.stopPrank();
+
+        return ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
+    }
+
+    // Helper function to match any parameters for mockCall
+    function _anyParams() internal pure returns (bytes memory) {
+        return new bytes(0);
+    }
+
+    // Helper function to create an array with a single uint32 value
+    function _uint32ArrayWithSingleValue(uint32 value)
+        internal
+        pure
+        returns (uint32[] memory)
+    {
+        uint32[] memory arr = new uint32[](1);
+        arr[0] = value;
+        return arr;
     }
 }

@@ -102,5 +102,9 @@ abstract contract EigenLayerMiddlewareStorage is IEigenLayerMiddleware {
     /// @notice Allocation Manager contract
     address public ALLOCATION_MANAGER;
 
-    uint256[50] private __gap;
+    /// @notice Minimum collateral required for validator registration
+    uint256 public REGISTRATION_MIN_COLLATERAL;
+
+    /// @notice Gap for future storage
+    uint256[50] private __GAP;
 }

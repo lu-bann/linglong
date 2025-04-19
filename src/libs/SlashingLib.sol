@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
-
 import { DelegationStore } from "../types/CommonTypes.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
@@ -50,14 +48,14 @@ library SlashingLib {
     // ==============================================================================================
 
     /// @notice Get all delegations for an operator under a registration root
-    /// @param registryAddress The registry contract address
+    /// @param registry The registry contract
     /// @param delegationStore The delegation store
     /// @param operator The operator address
     /// @param registrationRoot The registration root
     /// @return pubkeys Array of BLS public keys
     /// @return delegations Array of signed delegations
     function getAllDelegations(
-        address registryAddress,
+        IRegistry registry,
         DelegationStore storage delegationStore,
         address operator,
         bytes32 registrationRoot
@@ -70,16 +68,12 @@ library SlashingLib {
         )
     {
         IRegistry.OperatorData memory operatorData =
-            IRegistry(registryAddress).getOperatorData(registrationRoot);
+            registry.getOperatorData(registrationRoot);
         address owner = operatorData.owner;
         uint48 registeredAt = operatorData.registeredAt;
 
         if (registeredAt == 0) {
             revert RegistrationRootNotFound();
-        }
-
-        if (owner != operator) {
-            revert OperatorNotOwnerOfRegistrationRoot();
         }
 
         uint256 count = delegationStore.delegationMap.length();
@@ -97,14 +91,14 @@ library SlashingLib {
     }
 
     /// @notice Get a specific delegation by pubkey
-    /// @param registryAddress The registry contract address
+    /// @param registry The registry contract
     /// @param delegationStore The delegation store
     /// @param operator The operator address
     /// @param registrationRoot The registration root
     /// @param pubkey The BLS public key
     /// @return The signed delegation
     function getDelegation(
-        address registryAddress,
+        IRegistry registry,
         DelegationStore storage delegationStore,
         address operator,
         bytes32 registrationRoot,
@@ -115,7 +109,7 @@ library SlashingLib {
         returns (ISlasher.SignedDelegation memory)
     {
         IRegistry.OperatorData memory operatorData =
-            IRegistry(registryAddress).getOperatorData(registrationRoot);
+            registry.getOperatorData(registrationRoot);
         address owner = operatorData.owner;
         uint48 registeredAt = operatorData.registeredAt;
 
@@ -145,19 +139,19 @@ library SlashingLib {
     /// @param delegationStore The delegation store for the operator
     /// @param registrationRoots The set of registration roots
     /// @param slasher The slasher contract address
-    /// @param middleware The middleware contract address
+    /// @param committer The committer address
     /// @param params Common delegation parameters
     function optInToSlasher(
         IRegistry registry,
         DelegationStore storage delegationStore,
         EnumerableSet.Bytes32Set storage registrationRoots,
         address slasher,
-        address middleware,
+        address committer,
         DelegationParams calldata params
     )
         public
     {
-        registry.optInToSlasher(params.registrationRoot, slasher, middleware);
+        registry.optInToSlasher(params.registrationRoot, slasher, committer);
         registrationRoots.add(params.registrationRoot);
 
         for (uint256 i = 0; i < params.registrations.length; ++i) {
@@ -179,14 +173,14 @@ library SlashingLib {
     }
 
     /// @notice Batch set delegations for a registration root
-    /// @param registryAddress The registry contract address
+    /// @param registry The registry contract
     /// @param delegationStore The delegation store
     /// @param registrationRoot The registration root
     /// @param restakingMiddleware The restaking middleware address
     /// @param pubkeys BLS public keys
     /// @param delegations Signed delegations
     function batchSetDelegations(
-        address registryAddress,
+        IRegistry registry,
         DelegationStore storage delegationStore,
         bytes32 registrationRoot,
         address restakingMiddleware,
@@ -195,9 +189,7 @@ library SlashingLib {
     )
         public
     {
-        _validateOperatorRegistration(
-            registryAddress, registrationRoot, restakingMiddleware
-        );
+        _validateOperatorRegistration(registry, registrationRoot, restakingMiddleware);
 
         require(pubkeys.length == delegations.length, "Array length mismatch");
         require(
@@ -213,30 +205,6 @@ library SlashingLib {
                 delegationStore.delegations[pubkeyHash] = delegations[i];
             }
         }
-    }
-
-    // ==============================================================================================
-    // ================================= REGISTRATION FUNCTIONS ====================================
-    // ==============================================================================================
-
-    /// @notice Get all registration roots for an operator
-    /// @param registrationRoots The set of registration roots
-    /// @return Array of registration roots
-    function getOperatorRegistrationRoots(
-        EnumerableSet.Bytes32Set storage registrationRoots
-    )
-        public
-        view
-        returns (bytes32[] memory)
-    {
-        uint256 length = registrationRoots.length();
-        bytes32[] memory result = new bytes32[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            result[i] = registrationRoots.at(i);
-        }
-
-        return result;
     }
 
     // ==============================================================================================
@@ -259,14 +227,14 @@ library SlashingLib {
 
     /// @notice Internal helper to validate operator registration
     function _validateOperatorRegistration(
-        address registryAddress,
+        IRegistry registry,
         bytes32 registrationRoot,
         address restakingMiddleware
     )
         internal
     {
         IRegistry.OperatorData memory operatorData =
-            IRegistry(registryAddress).getOperatorData(registrationRoot);
+            registry.getOperatorData(registrationRoot);
         address owner = operatorData.owner;
         uint48 registeredAt = operatorData.registeredAt;
         uint48 unregisteredAt = operatorData.unregisteredAt;
@@ -288,10 +256,7 @@ library SlashingLib {
             revert OperatorUnregistered();
         }
 
-        if (
-            registeredAt + IRegistry(registryAddress).getConfig().fraudProofWindow
-                > block.number
-        ) {
+        if (registeredAt + registry.getConfig().fraudProofWindow > block.number) {
             revert OperatorFraudProofPeriodNotOver();
         }
     }
