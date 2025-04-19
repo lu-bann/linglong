@@ -182,40 +182,6 @@ contract TaiyiRegistryCoordinator is
         _operatorSets.createOperatorSet32(operatorSetId);
     }
 
-    /// @dev only Eigenlay
-    function addStrategiesToOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        external
-        onlyEigenLayerMiddleware
-    {
-        uint256 operatorSetCount = allocationManager.getOperatorSetCount(msg.sender);
-        require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
-        allocationManager.addStrategiesToOperatorSet({
-            avs: msg.sender,
-            operatorSetId: operatorSetId,
-            strategies: strategies
-        });
-    }
-
-    /// @dev only Eigenlay
-    function removeStrategiesFromOperatorSet(
-        uint32 operatorSetId,
-        IStrategy[] memory strategies
-    )
-        external
-        onlyEigenLayerMiddleware
-    {
-        uint256 operatorSetCount = allocationManager.getOperatorSetCount(msg.sender);
-        require(operatorSetId <= operatorSetCount, InvalidOperatorSetId());
-        allocationManager.removeStrategiesFromOperatorSet({
-            avs: msg.sender,
-            operatorSetId: operatorSetId,
-            strategies: strategies
-        });
-    }
-
     // ==============================================================================================
     // ================================= OWNER/ADMIN FUNCTIONS =====================================
     // ==============================================================================================
@@ -303,49 +269,36 @@ contract TaiyiRegistryCoordinator is
     /// @notice Gets an operator from an operator set by address
     /// @param baseOperatorSetId The base operator set ID
     /// @param operator The operator address
-    /// @return The operator address if found, address(0) otherwise
+    /// @return True if the operator is in the set, false otherwise
     function getEigenLayerOperatorFromOperatorSet(
         uint32 baseOperatorSetId,
         address operator
     )
         external
         view
-        returns (address)
+        returns (bool)
     {
-        if (
-            _operatorSets.isOperatorInSet32(
-                baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER),
-                operator
-            )
-        ) {
-            return operator;
-        } else {
-            revert OperatorNotInSet(operator, baseOperatorSetId);
-        }
+        return _operatorSets.isOperatorInSet32(
+            baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER),
+            operator
+        );
     }
 
     /// @notice Gets an operator from a subnetwork by address
     /// @param baseSubnetworkId The base subnetwork ID
     /// @param operator The operator address
-    /// @return The operator address if found, address(0) otherwise
+    /// @return True if the operator is in the set, false otherwise
     function getSymbioticOperatorFromOperatorSet(
         uint96 baseSubnetworkId,
         address operator
     )
         external
         view
-        returns (address)
+        returns (bool)
     {
-        if (
-            _operatorSets.isOperatorInSet96(
-                baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC),
-                operator
-            )
-        ) {
-            return operator;
-        } else {
-            revert OperatorNotInSet(operator, baseSubnetworkId);
-        }
+        return _operatorSets.isOperatorInSet96(
+            baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC), operator
+        );
     }
 
     /// @notice Checks if an operator is in a specific operator set
@@ -453,24 +406,24 @@ contract TaiyiRegistryCoordinator is
         view
         returns (AllocatedOperatorSets memory sets)
     {
+        // // Get Symbiotic subnetwork (uint96)
+        // uint96[] memory symbioticSubnetworkIds = ISymbioticNetworkMiddleware(
+        //     symbioticMiddleware
+        // ).getOperatorAllocatedSubnetworks(operator);
+
+        // // Initialize the symbioticSets array
+        // sets.symbioticSets = new uint96[](symbioticSubnetworkIds.length);
+        // for (uint256 i = 0; i < symbioticSubnetworkIds.length; i++) {
+        //     sets.symbioticSets[i] = symbioticSubnetworkIds[i];
+        // }
+
         // Get EigenLayer operator sets (uint32)
         OperatorSet[] memory eigenLayerSets = allocationManager.getAllocatedSets(operator);
-
-        // Get Symbiotic subnetwork (uint96)
-        uint96[] memory symbioticSubnetworkIds = ISymbioticNetworkMiddleware(
-            symbioticMiddleware
-        ).getOperatorAllocatedSubnetworks(operator);
 
         // Initialize the eigenLayerSets array
         sets.eigenLayerSets = new uint32[](eigenLayerSets.length);
         for (uint256 i = 0; i < eigenLayerSets.length; i++) {
             sets.eigenLayerSets[i] = eigenLayerSets[i].id;
-        }
-
-        // Initialize the symbioticSets array
-        sets.symbioticSets = new uint96[](symbioticSubnetworkIds.length);
-        for (uint256 i = 0; i < symbioticSubnetworkIds.length; i++) {
-            sets.symbioticSets[i] = symbioticSubnetworkIds[i];
         }
 
         return sets;
@@ -485,7 +438,7 @@ contract TaiyiRegistryCoordinator is
     )
         external
         view
-        returns (address[] memory allocatedStrategies)
+        returns (address[] memory)
     {
         OperatorSet memory operatorSet = OperatorSet({
             avs: msg.sender,
@@ -493,9 +446,11 @@ contract TaiyiRegistryCoordinator is
         });
         IStrategy[] memory strategies =
             allocationManager.getAllocatedStrategies(operator, operatorSet);
+        address[] memory allocatedStrategies = new address[](strategies.length);
         for (uint256 i = 0; i < strategies.length; i++) {
             allocatedStrategies[i] = address(strategies[i]);
         }
+        return allocatedStrategies;
     }
 
     /// @notice Returns all strategies that an operator has allocated magnitude to in a specific symbiotic subnetwork

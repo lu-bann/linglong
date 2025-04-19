@@ -393,5 +393,18 @@ contract Deploy is Script, Test {
         vm.writeJson(finalJ, "script/output/devnet/taiyiAddresses.json");
 
         vm.stopBroadcast();
+
+        vm.startBroadcast(implPrivateKey);
+        // Update registry coordinator with new registries
+        taiyiRegistryCoordinator.updateSocketRegistry(address(socketRegistry));
+        taiyiRegistryCoordinator.updatePubkeyRegistry(address(pubkeyRegistry));
+
+        linglongSlasher.setEigenLayerMiddleware(address(eigenLayerMiddleware));
+        taiyiRegistryCoordinator.setRestakingProtocol(
+            address(eigenLayerMiddleware),
+            ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
+
+        vm.stopBroadcast();
     }
 }

@@ -205,7 +205,7 @@ interface ISymbioticNetworkMiddleware {
         uint48 timestamp;
         bytes key;
         uint256 amount;
-        bytes32 subnetwork;
+        uint96 subnetwork;
         bytes[] slashHints;
     }
 }
