@@ -3,8 +3,6 @@ pragma solidity ^0.8.27;
 
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
-
 import { DelegationStore } from "../types/CommonTypes.sol";
 import { OperatorSubsetLib } from "./OperatorSubsetLib.sol";
 import { DelegationManager } from
@@ -23,11 +21,11 @@ import { OperatorSet } from
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 import { EnumerableMapLib } from "@solady/utils/EnumerableMapLib.sol";
-
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
+import { console } from "forge-std/console.sol";
 
 /// @title EigenLayerMiddlewareLib
 /// @notice Library with helper functions for EigenLayerMiddleware to reduce main contract size
@@ -46,10 +44,15 @@ library EigenLayerMiddlewareLib {
     error UseCreateOperatorDirectedAVSRewardsSubmission();
     error OnlyRegistryCoordinator();
     error OnlyRewardsInitiator();
+    error OnlySlasher();
     error RegistrationRootNotFound();
     error OperatorNotOwnerOfRegistrationRoot();
     error PubKeyNotFound();
     error OperatorNotRegistered();
+    error FraudProofWindowNotPassed();
+    error InvalidDelegationSignaturesLength();
+    error InvalidRegistrationsLength();
+    error OperatorIsSlashed();
 
     /// @notice Helper function to deduplicate strategies from operator sets
     /// @param operatorSets Array of operator sets
@@ -73,8 +76,9 @@ library EigenLayerMiddlewareLib {
 
         // Count total strategies first
         for (uint256 i = 0; i < operatorSetsLength;) {
+            (, uint32 baseId) = operatorSets[i].id.decodeOperatorSetId32();
             address[] memory setStrategies = registryCoordinator
-                .getEigenLayerOperatorAllocatedStrategies(operator, operatorSets[i].id);
+                .getEigenLayerOperatorAllocatedStrategies(operator, baseId);
             totalStrategiesCount += setStrategies.length;
             unchecked {
                 ++i;
@@ -91,10 +95,10 @@ library EigenLayerMiddlewareLib {
 
         // Fill array with all strategies
         for (uint256 i = 0; i < operatorSetsLength;) {
+            (, uint32 baseId) = operatorSets[i].id.decodeOperatorSetId32();
             address[] memory setStrategies = registryCoordinator
-                .getEigenLayerOperatorAllocatedStrategies(operator, operatorSets[i].id);
+                .getEigenLayerOperatorAllocatedStrategies(operator, baseId);
             uint256 setStrategiesLength = setStrategies.length;
-
             for (uint256 j = 0; j < setStrategiesLength;) {
                 allStrategies[allStrategiesLength] = setStrategies[j];
                 unchecked {
@@ -361,47 +365,28 @@ library EigenLayerMiddlewareLib {
         rewardsCoordinator.setClaimerFor(claimer);
     }
 
+    function registerValidators(
+        IRegistry registry,
+        IRegistry.SignedRegistration[] calldata registrations,
+        uint256 registrationMinCollateral
+    )
+        internal
+        returns (bytes32 registrationRoot)
+    {
+        registrationRoot = registry.register{ value: registrationMinCollateral }(
+            registrations, address(this)
+        );
+    }
+
     /// @notice Unregister validators associated with a registration root
     /// @param registry The Registry contract
-    /// @param operatorDelegations Mapping to store operator delegations
-    /// @param operatorRegistrationRoots Set of registration roots for the operator
-    /// @param operator The operator address
     /// @param registrationRoot The registration root to unregister
     function unregisterValidators(
         IRegistry registry,
-        mapping(address => mapping(bytes32 => DelegationStore)) storage
-            operatorDelegations,
-        mapping(address => EnumerableSet.Bytes32Set) storage operatorRegistrationRoots,
-        address operator,
         bytes32 registrationRoot
     )
         internal
     {
-        // Ensure the registration root is valid for this operator
-        if (
-            registrationRoot == bytes32(0)
-                || operatorDelegations[operator][registrationRoot].delegationMap.length() == 0
-        ) {
-            revert OperatorNotRegistered();
-        }
-
-        // Get reference to the delegation store
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
-
-        // Clear all delegations
-        for (uint256 i = 0; i < delegationStore.delegationMap.length(); i++) {
-            (uint256 index, bytes32 pubkeyHash) = delegationStore.delegationMap.at(i);
-            delete delegationStore.delegations[pubkeyHash];
-            delegationStore.delegationMap.remove(index);
-        }
-
-        // Delete the pubkey hashes array
-        delete operatorDelegations[operator][registrationRoot];
-        EnumerableSet.Bytes32Set storage roots = operatorRegistrationRoots[operator];
-        roots.remove(registrationRoot);
-
-        // Unregister from the registry
         registry.unregister(registrationRoot);
     }
 
@@ -455,15 +440,14 @@ library EigenLayerMiddlewareLib {
 
     /// @notice Gets a delegation for an operator by validator pubkey
     /// @param registry The registry contract
-    /// @param operatorDelegations Storage mapping for delegations
+    /// @param delegationStore Storage mapping for delegations
     /// @param operator The operator address
     /// @param registrationRoot The registration root
     /// @param pubkey BLS public key of the validator
     /// @return The signed delegation information
     function getDelegation(
         IRegistry registry,
-        mapping(address => mapping(bytes32 => DelegationStore)) storage
-            operatorDelegations,
+        DelegationStore storage delegationStore,
         address operator,
         bytes32 registrationRoot,
         BLS.G1Point calldata pubkey
@@ -486,8 +470,6 @@ library EigenLayerMiddlewareLib {
         }
 
         bytes32 pubkeyHash = keccak256(abi.encode(pubkey));
-        DelegationStore storage delegationStore =
-            operatorDelegations[operator][registrationRoot];
 
         if (delegationStore.delegations[pubkeyHash].delegation.committer != address(0)) {
             return delegationStore.delegations[pubkeyHash];

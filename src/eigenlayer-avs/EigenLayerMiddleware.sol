@@ -26,6 +26,15 @@ import { IAllocationManager } from
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
+import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
+import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
+
+import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
+import { SlashingLib } from "../libs/SlashingLib.sol";
+import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
+import { DelegationStore } from "../types/CommonTypes.sol";
+import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
@@ -33,28 +42,18 @@ import { IRewardsCoordinatorTypes } from
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-
-import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
-import { EigenLayerMiddlewareLib } from "../libs/EigenLayerMiddlewareLib.sol";
+import { console } from "forge-std/console.sol";
 
-import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
-import { EigenLayerMiddlewareStorage } from "../storage/EigenLayerMiddlewareStorage.sol";
-import { EigenLayerRewardsHandler } from "./EigenLayerRewardsHandler.sol";
-
-import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
-import { SlashingLib } from "../libs/SlashingLib.sol";
-import { DelegationStore } from "../types/CommonTypes.sol";
 /// @title EigenLayer Middleware Contract
 /// @notice Manages operator registration, delegation, and restaking in EigenLayer ecosystem
 /// @dev This contract serves as the interface between validators and EigenLayer infrastructure
 ///      and provides functionality for registering validators, managing operator sets,
 ///      handling rewards, and integrating with external registries
-
 contract EigenLayerMiddleware is
     OwnableUpgradeable,
     UUPSUpgradeable,
@@ -136,27 +135,11 @@ contract EigenLayerMiddleware is
 
     /// @notice Initializes the contract with all required dependencies and configuration
     /// @param _owner Address that will own the contract
-    /// @param _avsDirectory Address of the AVS directory contract
-    /// @param _delegationManager Address of EigenLayer's delegation manager
-    /// @param _rewardCoordinator Address of EigenLayer's reward coordinator
-    /// @param _rewardInitiator Address authorized to initiate rewards
-    /// @param _registryCoordinator Address of the registry coordinator
-    /// @param _underwriterShareBips Percentage of rewards for underwriters in basis points
-    /// @param _registry Address of the validator registry contract
-    /// @param _slasher Address of the slasher contract
-    /// @param _allocationManager Address of the allocation manager contract
+    /// @param _config Configuration struct containing all initialization parameters
     /// @dev Sets up all contract dependencies and configures initial parameters
     function initialize(
         address _owner,
-        address _avsDirectory,
-        address _delegationManager,
-        address _rewardCoordinator,
-        address _rewardInitiator,
-        address _registryCoordinator,
-        uint256 _underwriterShareBips,
-        address _registry,
-        address _slasher,
-        address _allocationManager
+        Config calldata _config
     )
         public
         virtual
@@ -165,15 +148,16 @@ contract EigenLayerMiddleware is
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
 
-        AVS_DIRECTORY = IAVSDirectory(_avsDirectory);
-        DELEGATION_MANAGER = DelegationManager(_delegationManager);
-        REWARDS_COORDINATOR = IRewardsCoordinator(_rewardCoordinator);
-        _setRewardsInitiator(_rewardInitiator);
-        UNDERWRITER_SHARE_BIPS = _underwriterShareBips;
-        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
-        REGISTRY = IRegistry(_registry);
-        SLASHER = address(ILinglongSlasher(_slasher));
-        ALLOCATION_MANAGER = _allocationManager;
+        AVS_DIRECTORY = IAVSDirectory(_config.avsDirectory);
+        DELEGATION_MANAGER = DelegationManager(_config.delegationManager);
+        REWARDS_COORDINATOR = IRewardsCoordinator(_config.rewardCoordinator);
+        _setRewardsInitiator(_config.rewardInitiator);
+        UNDERWRITER_SHARE_BIPS = _config.underwriterShareBips;
+        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_config.registryCoordinator);
+        REGISTRY = IRegistry(_config.registry);
+        SLASHER = address(ILinglongSlasher(_config.slasher));
+        ALLOCATION_MANAGER = _config.allocationManager;
+        REGISTRATION_MIN_COLLATERAL = _config.registrationMinCollateral;
     }
 
     // ==============================================================================================
@@ -182,26 +166,49 @@ contract EigenLayerMiddleware is
 
     /// @notice Registers multiple validators in a single transaction
     /// @param registrations Array of validator registration parameters
-    /// @param delegationSignatures BLS signatures authorizing delegation
-    /// @param delegateePubKey BLS public key of the delegatee
-    /// @param delegateeAddress Address of the delegatee
-    /// @param data Additional data for the registrations
-    /// @return registrationRoot Root hash of the registered validators
     /// @dev Registers validators with the Registry contract and sends required collateral
-    function registerValidators(
-        IRegistry.SignedRegistration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
+    function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable
-        returns (bytes32 registrationRoot)
+        returns (bytes32)
     {
-        registrationRoot = _registerValidators(
-            registrations, delegationSignatures, delegateePubKey, delegateeAddress, data
+        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+            revert
+                EigenLayerMiddlewareLib
+                .OperatorIsNotYetRegisteredInValidatorOperatorSet();
+        }
+        return EigenLayerMiddlewareLib.registerValidators(
+            REGISTRY, registrations, REGISTRATION_MIN_COLLATERAL
         );
+    }
+
+    /// @notice Executes slashing for an operator through the EigenLayer allocation manager
+    /// @param params The slashing parameters
+    /// @return success Whether the slashing was successful
+    function executeSlashing(IAllocationManagerTypes.SlashingParams memory params)
+        external
+        returns (bool success)
+    {
+        // Ensure only the LinglongSlasher can call this function
+        if (msg.sender != SLASHER) {
+            revert EigenLayerMiddlewareLib.OnlySlasher();
+        }
+
+        return _executeEigenLayerSlashing(address(this), params);
+    }
+
+    /// @notice Unregisters validators associated with a registration root
+    /// @param registrationRoot The registration root to unregister
+    /// @dev Removes all delegations and unregisters from the Registry contract
+    function unregisterValidators(bytes32 registrationRoot) external {
+        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+            revert
+                EigenLayerMiddlewareLib
+                .OperatorIsNotYetRegisteredInValidatorOperatorSet();
+        }
+        delete operatorDelegations[msg.sender][registrationRoot];
+        operatorRegistrationRoots[msg.sender].remove(registrationRoot);
+        EigenLayerMiddlewareLib.unregisterValidators(REGISTRY, registrationRoot);
     }
 
     /// @notice Updates delegations for validators under a registration root
@@ -215,20 +222,15 @@ contract EigenLayerMiddleware is
         ISlasher.SignedDelegation[] calldata delegations
     )
         external
+        onlyValidatorOperatorSet
     {
-        _batchSetDelegations(registrationRoot, pubkeys, delegations);
-    }
-
-    /// @notice Unregisters validators associated with a registration root
-    /// @param registrationRoot The registration root to unregister
-    /// @dev Removes all delegations and unregisters from the Registry contract
-    function unregisterValidators(bytes32 registrationRoot) external {
-        EigenLayerMiddlewareLib.unregisterValidators(
+        SlashingLib.batchSetDelegations(
             REGISTRY,
-            operatorDelegations,
-            operatorRegistrationRoots,
-            msg.sender,
-            registrationRoot
+            operatorDelegations[msg.sender][registrationRoot],
+            registrationRoot,
+            address(this),
+            pubkeys,
+            delegations
         );
     }
 
@@ -263,6 +265,36 @@ contract EigenLayerMiddleware is
     )
         external
     {
+        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+            revert
+                EigenLayerMiddlewareLib
+                .OperatorIsNotYetRegisteredInValidatorOperatorSet();
+        }
+
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(1, delegateeAddress)
+        ) {
+            revert
+                EigenLayerMiddlewareLib
+                .OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
+        }
+
+        if (registrations.length != REGISTRY.getOperatorData(registrationRoot).numKeys) {
+            revert EigenLayerMiddlewareLib.InvalidRegistrationsLength();
+        }
+
+        if (delegationSignatures.length != registrations.length) {
+            revert EigenLayerMiddlewareLib.InvalidDelegationSignaturesLength();
+        }
+
+        if (REGISTRY.getOperatorData(registrationRoot).registeredAt == 0) {
+            revert EigenLayerMiddlewareLib.OperatorNotRegistered();
+        }
+
+        if (REGISTRY.isSlashed(registrationRoot)) {
+            revert EigenLayerMiddlewareLib.OperatorIsSlashed();
+        }
+
         SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,
             registrations,
@@ -271,12 +303,13 @@ contract EigenLayerMiddleware is
             delegateeAddress,
             data
         );
+
         SlashingLib.optInToSlasher(
             REGISTRY,
             operatorDelegations[msg.sender][registrationRoot],
             operatorRegistrationRoots[msg.sender],
             SLASHER,
-            address(this),
+            address(msg.sender),
             params
         );
     }
@@ -438,8 +471,7 @@ contract EigenLayerMiddleware is
         view
         returns (bytes32[] memory)
     {
-        return
-            SlashingLib.getOperatorRegistrationRoots(operatorRegistrationRoots[operator]);
+        return operatorRegistrationRoots[operator].values();
     }
 
     /// @notice Gets an operator's restaked strategies and their stake amounts
@@ -500,7 +532,11 @@ contract EigenLayerMiddleware is
         returns (ISlasher.SignedDelegation memory)
     {
         return EigenLayerMiddlewareLib.getDelegation(
-            REGISTRY, operatorDelegations, operator, registrationRoot, pubkey
+            REGISTRY,
+            operatorDelegations[operator][registrationRoot],
+            operator,
+            registrationRoot,
+            pubkey
         );
     }
 
@@ -522,7 +558,7 @@ contract EigenLayerMiddleware is
         )
     {
         return SlashingLib.getAllDelegations(
-            address(REGISTRY),
+            REGISTRY,
             operatorDelegations[operator][registrationRoot],
             operator,
             registrationRoot
@@ -563,75 +599,6 @@ contract EigenLayerMiddleware is
     // ================================= INTERNAL FUNCTIONS ========================================
     // ==============================================================================================
 
-    /// @notice Internal implementation for batch setting delegations
-    /// @param registrationRoot The registration root
-    /// @param pubkeys BLS public keys of validators
-    /// @param delegations Signed delegations to set
-    /// @dev Performs various validations before updating delegations
-    function _batchSetDelegations(
-        bytes32 registrationRoot,
-        BLS.G1Point[] calldata pubkeys,
-        ISlasher.SignedDelegation[] calldata delegations
-    )
-        internal
-        onlyValidatorOperatorSet
-    {
-        SlashingLib.batchSetDelegations(
-            address(REGISTRY),
-            operatorDelegations[msg.sender][registrationRoot],
-            registrationRoot,
-            address(this),
-            pubkeys,
-            delegations
-        );
-    }
-
-    /// @notice Internal implementation for registering validators
-    /// @param registrations Array of validator registration parameters
-    /// @param delegationSignatures BLS signatures authorizing delegation
-    /// @param delegateePubKey BLS public key of the delegatee
-    /// @param delegateeAddress Address of the delegatee
-    /// @return registrationRoot Root hash of the registered validators
-    /// @dev Verifies delegatee is registered and handles registration with the Registry
-    function _registerValidators(
-        IRegistry.SignedRegistration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
-        internal
-        onlyValidatorOperatorSet
-        returns (bytes32 registrationRoot)
-    {
-        // Validate registrations
-        require(registrations.length == delegationSignatures.length, "Mismatched lengths");
-
-        // Register with Registry
-        registrationRoot =
-            REGISTRY.register{ value: 0.11 ether }(registrations, address(this));
-
-        SlashingLib.DelegationParams memory params = _constructDelegationParams(
-            registrationRoot,
-            registrations,
-            delegationSignatures,
-            delegateePubKey,
-            delegateeAddress,
-            data
-        );
-
-        // Todo: add seperatr opt-in logic after fraud proof window
-        // Opt in to slasher
-        SlashingLib.optInToSlasher(
-            REGISTRY,
-            operatorDelegations[msg.sender][registrationRoot],
-            operatorRegistrationRoots[msg.sender],
-            SLASHER,
-            address(this),
-            params
-        );
-    }
-
     /// @notice Internal function to set the rewards initiator
     /// @param newRewardsInitiator Address of the new rewards initiator
     function _setRewardsInitiator(address newRewardsInitiator) internal {
@@ -659,5 +626,23 @@ contract EigenLayerMiddleware is
             delegateeAddress: delegateeAddress,
             data: data
         });
+    }
+
+    /// @dev Execute slashing through the allocation manager for EigenLayer
+    /// @param avs The address of the AVS initiating the slash
+    /// @param params The slashing parameters
+    /// @return success Whether the slashing was successful
+    function _executeEigenLayerSlashing(
+        address avs,
+        IAllocationManagerTypes.SlashingParams memory params
+    )
+        internal
+        returns (bool success)
+    {
+        try IAllocationManager(ALLOCATION_MANAGER).slashOperator(avs, params) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 }

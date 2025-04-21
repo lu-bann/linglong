@@ -32,10 +32,6 @@ contract MockLinglongChallenger is ILinglongChallenger {
         return _isInstantSlashing;
     }
 
-    function getOperatorSetId() external pure returns (uint32) {
-        return 1;
-    }
-
     function getSlashAmount() external pure returns (uint256) {
         return 1 ether;
     }
@@ -55,7 +51,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
 
     function isSlashingInProgress(
         address,
-        uint32
+        uint96
     )
         external
         view

@@ -48,11 +48,8 @@ interface ILinglongSlasher is ISlasher {
 
     /// @notice Emitted when a slashing result is recorded
     /// @param operator The operator being slashed
-    /// @param operatorSetId The ID of the operator set
     /// @param wasExecuted Whether the slashing was executed
-    event SlashingResult(
-        address indexed operator, uint32 indexed operatorSetId, bool wasExecuted
-    );
+    event SlashingResult(address indexed operator, bool wasExecuted);
 
     /// @notice Emitted when a violation type is configured for a specific operator set
     /// @param violationType The type of violation
@@ -139,7 +136,7 @@ interface ILinglongSlasher is ISlasher {
     /// @return slashingId The ID of the slashing request (if any)
     function isSlashingInProgress(
         address operator,
-        uint32 operatorSetId,
+        uint96 operatorSetId,
         address challengeContract
     )
         external
