@@ -248,14 +248,8 @@ contract EigenlayerDeployer is Operators {
             stdJson.readAddress(operatorConfigJson, ".multisig_addresses.pauserMultisig");
 
         // Deploy contracts
-        try vm.envUint("CHAIN_ID") returns (uint256 chainId) {
-            if (chainId == 31_337) {
-                staker = _deployEigenLayerContractsLocal();
-            }
-            // If CHAIN_ID ENV is not set, assume local deployment on 31337
-        } catch {
-            staker = _deployEigenLayerContractsLocal();
-        }
+
+        staker = _deployEigenLayerContractsLocal();
 
         fuzzedAddressMapping[address(0)] = true;
         fuzzedAddressMapping[address(eigenLayerProxyAdmin)] = true;
