@@ -16,6 +16,7 @@
   src = "src"
   test = "test"
   via_ir = false
+  ffi = true
 
 remappings = [
   "forge-std/=lib/forge-std/src/",
@@ -68,6 +69,7 @@ remappings = [
   src = "src"
   test = "test"
   via_ir = true
+  ffi = true
 
 [fmt]
   bracket_spacing = true

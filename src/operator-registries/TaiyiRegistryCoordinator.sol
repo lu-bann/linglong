@@ -684,25 +684,9 @@ contract TaiyiRegistryCoordinator is
         internal
         returns (bytes32 operatorId)
     {
-        // Use a special test mode if we detect we're in a test environment
-        if (block.chainid == 31_337) {
-            // Hardhat/Anvil Chain ID (test mode)
-            operatorId = pubkeyRegistry.getOperatorId(operator);
-
-            if (operatorId == bytes32(0)) {
-                // If not registered, we'll register with the provided params
-                operatorId = pubkeyRegistry.getOrRegisterOperatorId(
-                    operator, params, pubkeyRegistrationMessageHash(operator)
-                );
-            }
-
-            return operatorId;
-        } else {
-            // Normal production path
-            return pubkeyRegistry.getOrRegisterOperatorId(
-                operator, params, pubkeyRegistrationMessageHash(operator)
-            );
-        }
+        return pubkeyRegistry.getOrRegisterOperatorId(
+            operator, params, pubkeyRegistrationMessageHash(operator)
+        );
     }
 
     /// @notice Updates an operator's socket address in the SocketRegistry

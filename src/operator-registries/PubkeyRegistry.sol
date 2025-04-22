@@ -47,44 +47,32 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
             pubkeyHashToOperator[pubkeyHash] == address(0), BLSPubkeyAlreadyRegistered()
         );
 
-        // In test mode (Anvil/Hardhat chain ID), we'll skip the signature verification
-        if (block.chainid != 31_337) {
-            // gamma = h(sigma, P, P', H(m))
-            uint256 gamma = uint256(
-                keccak256(
-                    abi.encodePacked(
-                        params.pubkeyRegistrationSignature.X,
-                        params.pubkeyRegistrationSignature.Y,
-                        params.pubkeyG1.X,
-                        params.pubkeyG1.Y,
-                        params.pubkeyG2.X,
-                        params.pubkeyG2.Y,
-                        pubkeyRegistrationMessageHash.X,
-                        pubkeyRegistrationMessageHash.Y
-                    )
+        // gamma = h(sigma, P, P', H(m))
+        uint256 gamma = uint256(
+            keccak256(
+                abi.encodePacked(
+                    params.pubkeyRegistrationSignature.X,
+                    params.pubkeyRegistrationSignature.Y,
+                    params.pubkeyG1.X,
+                    params.pubkeyG1.Y,
+                    params.pubkeyG2.X,
+                    params.pubkeyG2.Y,
+                    pubkeyRegistrationMessageHash.X,
+                    pubkeyRegistrationMessageHash.Y
                 )
-            ) % BN254.FR_MODULUS;
+            )
+        ) % BN254.FR_MODULUS;
 
-            // e(sigma + P * gamma, [-1]_2) = e(H(m) + [1]_1 * gamma, P')
-            require(
-                BN254.pairing(
-                    params.pubkeyRegistrationSignature.plus(
-                        params.pubkeyG1.scalar_mul(gamma)
-                    ),
-                    BN254.negGeneratorG2(),
-                    pubkeyRegistrationMessageHash.plus(
-                        BN254.generatorG1().scalar_mul(gamma)
-                    ),
-                    params.pubkeyG2
-                ),
-                InvalidBLSSignatureOrPrivateKey()
-            );
-        } else {
-            // We're in test mode, log this bypass
-            console.log(
-                "Bypassing BLS signature validation in test mode for operator:", operator
-            );
-        }
+        // e(sigma + P * gamma, [-1]_2) = e(H(m) + [1]_1 * gamma, P')
+        require(
+            BN254.pairing(
+                params.pubkeyRegistrationSignature.plus(params.pubkeyG1.scalar_mul(gamma)),
+                BN254.negGeneratorG2(),
+                pubkeyRegistrationMessageHash.plus(BN254.generatorG1().scalar_mul(gamma)),
+                params.pubkeyG2
+            ),
+            InvalidBLSSignatureOrPrivateKey()
+        );
 
         operatorToPubkey[operator] = params.pubkeyG1;
         operatorToPubkeyG2[operator] = params.pubkeyG2;
