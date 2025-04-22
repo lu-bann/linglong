@@ -17,7 +17,6 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     TaiyiRegistryCoordinator registry;
 
     function setUp() public virtual override {
-        address proxyAdmin = makeAddr("proxyAdmin");
         SYMBIOTIC_CORE_PROJECT_ROOT = "lib/middleware-sdk/lib/core/";
         super.setUp();
 

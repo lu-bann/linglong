@@ -77,7 +77,7 @@ contract RestakingProtocolMapLibTest is Test {
         assertEq(map.length(), 3, "Length should be 3 after removing an address");
     }
 
-    function testAddressAt() public {
+    function testAddressAt() public view {
         // The order is not guaranteed by EnumerableSet, but we can test that
         // all addresses are accessible via index
         address[] memory allAddresses = new address[](3);
@@ -92,7 +92,7 @@ contract RestakingProtocolMapLibTest is Test {
         );
     }
 
-    function testAddresses() public {
+    function testAddresses() public view {
         address[] memory addresses = map.addresses();
         assertEq(addresses.length, 3, "Should return all 3 addresses");
 
@@ -103,7 +103,7 @@ contract RestakingProtocolMapLibTest is Test {
         );
     }
 
-    function testAddressesByProtocol() public {
+    function testAddressesByProtocol() public view {
         address[] memory eigenlayerAddresses = map.addressesByProtocol(
             ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
         );
@@ -123,7 +123,7 @@ contract RestakingProtocolMapLibTest is Test {
         );
     }
 
-    function testProtocolAt() public {
+    function testProtocolAt() public view {
         // Since we don't know the order in EnumerableSet, we'll verify all protocols
         // are accessible via index
         bool foundEigenlayer = false;

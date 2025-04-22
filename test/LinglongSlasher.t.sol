@@ -49,7 +49,7 @@ contract LinglongSlasherTest is Test {
 
         // Deploy EigenLayer
         eigenLayerDeployer = new EigenlayerDeployer();
-        address staker = eigenLayerDeployer.setUp();
+        eigenLayerDeployer.setUp();
 
         // Deploy Registry
         registry = new Registry(

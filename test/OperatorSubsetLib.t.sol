@@ -44,7 +44,7 @@ contract OperatorSubsetLibTest is Test {
 
     // --- Encoding & Decoding Tests ---
 
-    function testEncodeDecode96() public {
+    function testEncodeDecode96() public pure {
         uint96 encodedId96_1 =
             OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1);
         uint96 encodedId96_2 =
@@ -72,7 +72,7 @@ contract OperatorSubsetLibTest is Test {
         assertEq(decodedBaseId, MAX_BASE_ID, "Decoded baseId max mismatch");
     }
 
-    function testEncodeDecode32() public {
+    function testEncodeDecode32() public pure {
         uint32 encodedId32_1 =
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1);
         uint32 encodedId32_2 =
@@ -106,7 +106,7 @@ contract OperatorSubsetLibTest is Test {
         assertEq(decodedBaseId, MAX_BASE_ID_32, "Decoded baseId max mismatch (32)");
     }
 
-    function testGetters96() public {
+    function testGetters96() public pure {
         uint96 encodedId96_1 =
             OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1);
         uint96 encodedId96_2 =
@@ -135,7 +135,7 @@ contract OperatorSubsetLibTest is Test {
         );
     }
 
-    function testGetters32() public {
+    function testGetters32() public pure {
         uint32 encodedId32_1 =
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1);
         uint32 encodedId32_2 =
@@ -190,7 +190,7 @@ contract OperatorSubsetLibTest is Test {
         );
     }
 
-    function testGetOperatorSetsEmpty() public {
+    function testGetOperatorSetsEmpty() public view {
         uint96[] memory sets96 = operatorSets.getOperatorSets96();
         assertEq(sets96.length, 0, "Should return empty array when no 96-bit sets");
 
