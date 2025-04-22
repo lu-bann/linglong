@@ -4,6 +4,7 @@ coverage
 node_modules
 out
 .cursor/
+.devcontainer
 
 # files
 *.env
