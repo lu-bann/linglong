@@ -6,7 +6,6 @@ out
 .cursor/
 .devcontainer
 
-
 # files
 *.env
 *.log

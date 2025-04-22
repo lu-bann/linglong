@@ -491,6 +491,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         uint256 privateKey
     )
         internal
+        view
         returns (BN254.G1Point memory)
     {
         BN254.G1Point memory messageHash =
@@ -498,7 +499,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         return BN254.scalar_mul(messageHash, privateKey);
     }
 
-    function _verifyOperatorSetExists(OperatorSet memory opSet) internal {
+    function _verifyOperatorSetExists(OperatorSet memory opSet) internal view {
         assertTrue(
             eigenLayerDeployer.allocationManager().isOperatorSet(opSet),
             "Operator set should exist"
@@ -507,23 +508,24 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertEq(count, 2, "Should have 2 operator set");
     }
 
-    function _verifyOperatorRegistrationInEigenLayer(address operator) internal {
+    function _verifyOperatorRegistrationInEigenLayer(address _operator) internal view {
         assertTrue(
-            eigenLayerDeployer.delegation().isOperator(operator),
+            eigenLayerDeployer.delegation().isOperator(_operator),
             "Operator should be registered in EigenLayer"
         );
     }
 
     function _verifyOperatorAllocation(
-        address operator,
+        address _operator,
         OperatorSet memory opSet
     )
         internal
+        view
         returns (IStrategy[] memory)
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         assertTrue(
-            allocationManager.isMemberOfOperatorSet(operator, opSet),
+            allocationManager.isMemberOfOperatorSet(_operator, opSet),
             "Operator should be a member of the operator set"
         );
 
@@ -533,7 +535,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
 
         IAllocationManagerTypes.Allocation memory allocation =
-            allocationManager.getAllocation(operator, opSet, strategies[0]);
+            allocationManager.getAllocation(_operator, opSet, strategies[0]);
 
         assertEq(allocation.currentMagnitude, uint64(_WAD), "Wrong allocation magnitude");
         assertEq(int256(allocation.pendingDiff), 0, "Should have no pending diff");
@@ -542,16 +544,17 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _verifyOperatorInOperatorSet(
-        address operator,
+        address _operator,
         OperatorSet memory opSet
     )
         internal
+        view
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         address[] memory members = allocationManager.getMembers(opSet);
         bool operatorFound = false;
         for (uint256 i = 0; i < members.length; i++) {
-            if (members[i] == operator) {
+            if (members[i] == _operator) {
                 operatorFound = true;
                 break;
             }
@@ -569,9 +572,9 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertEq(baseOperatorSetId, uint32(0), "Operator set ID should match");
     }
 
-    function _verifyOperatorStake(address operator) internal {
+    function _verifyOperatorStake(address _operator) internal view {
         (IStrategy[] memory strategies, uint256[] memory stakeAmounts) =
-            middleware.getStrategiesAndStakes(operator);
+            middleware.getStrategiesAndStakes(_operator);
         assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
         assertEq(
             stakeAmounts[0], STAKE_AMOUNT, "Should have 1 stake amount in operator set"
@@ -633,15 +636,21 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         );
     }
 
-    function _verifyDeregistration(address operator, OperatorSet memory opSet) internal {
+    function _verifyDeregistration(
+        address _operator,
+        OperatorSet memory opSet
+    )
+        internal
+        view
+    {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         assertFalse(
-            allocationManager.isMemberOfOperatorSet(operator, opSet),
+            allocationManager.isMemberOfOperatorSet(_operator, opSet),
             "Operator should no longer be a member of the operator set after deregistration"
         );
 
         // Check the operator is still in the allocated sets (deallocation pending)
-        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(operator);
+        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(_operator);
         bool stillAllocated = false;
         for (uint256 i = 0; i < allocatedSets.length; i++) {
             if (
@@ -808,7 +817,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _removeStrategiesAndVerify(
-        uint32 operatorSetId,
+        uint32 _operatorSetId,
         IStrategy[] memory strategies,
         OperatorSet memory opSet
     )
@@ -816,7 +825,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         vm.startPrank(owner);
-        middleware.removeStrategiesFromOperatorSet(operatorSetId, strategies);
+        middleware.removeStrategiesFromOperatorSet(_operatorSetId, strategies);
         vm.stopPrank();
 
         IStrategy[] memory remainingStrategies =
@@ -856,10 +865,6 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         internal
         returns (bytes32)
     {
-        // Create BLS keys and signatures for registration
-        uint256 validatorPrivKey1 = 12_345; // Use a deterministic private key for testing
-        uint256 validatorPrivKey2 = 67_890; // Second validator key
-
         // Create registrations array with validator public keys
         IRegistry.SignedRegistration[] memory registrations =
             new IRegistry.SignedRegistration[](2);
@@ -1091,13 +1096,14 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _createMockCommitment(
-        bytes32 registrationRoot,
+        bytes32, /*registrationRoot*/
         address primaryOp,
-        address underwriterOp,
+        address, /*underwriterOp*/
         uint256 primaryOpKey,
-        uint256 underwriterOpKey
+        uint256 /*underwriterOpKey*/
     )
         internal
+        view
         returns (ISlasher.SignedCommitment memory)
     {
         // Create a challenge struct that the slasher expects

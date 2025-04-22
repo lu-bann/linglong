@@ -64,6 +64,7 @@ contract TaiyiInteractiveChallengerTest is Test {
 
     function _readPreconfRequestAType(string memory jsonPath)
         internal
+        view
         returns (PreconfRequestAType memory preconfRequestAType)
     {
         string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
@@ -77,7 +78,6 @@ contract TaiyiInteractiveChallengerTest is Test {
             uint64 slot,
             uint64 sequenceNum,
             address signer,
-            uint64 chainId
         ) = abi.decode(
             abiEncodedPreconfRequestAType,
             (string, string[], uint64, uint64, address, uint64)
@@ -88,6 +88,7 @@ contract TaiyiInteractiveChallengerTest is Test {
 
     function _readPreconfRequestBType(string memory jsonPath)
         internal
+        view
         returns (PreconfRequestBType memory preconfRequestBType)
     {
         string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
@@ -99,8 +100,7 @@ contract TaiyiInteractiveChallengerTest is Test {
             string memory blockspaceAllocationEncoded,
             string memory blockspaceAllocationSignature,
             string memory transaction,
-            address signer,
-            uint64 chainId
+            ,
         ) = abi.decode(
             abiEncodedPreconfRequestBType, (string, string, string, address, uint64)
         );
@@ -137,7 +137,11 @@ contract TaiyiInteractiveChallengerTest is Test {
         });
     }
 
-    function _readProofData(string memory jsonPath) internal returns (ProofData memory) {
+    function _readProofData(string memory jsonPath)
+        internal
+        view
+        returns (ProofData memory)
+    {
         string memory json = vm.readFile(string.concat(vm.projectRoot(), jsonPath));
 
         string memory proofValues = vm.parseJsonString(json, ".public_values");
@@ -147,13 +151,8 @@ contract TaiyiInteractiveChallengerTest is Test {
         bytes memory proofBytesBytes = vm.parseBytes(proofBytes);
 
         // Decode proof values for block info
-        (
-            uint64 proofBlockTimestamp,
-            bytes32 proofBlockHash,
-            uint64 proofBlockNumber,
-            address proofUnderwriterAddress,
-            bytes memory proofSignature
-        ) = abi.decode(proofValuesBytes, (uint64, bytes32, uint64, address, bytes));
+        (, bytes32 proofBlockHash, uint64 proofBlockNumber,,) =
+            abi.decode(proofValuesBytes, (uint64, bytes32, uint64, address, bytes));
 
         return ProofData({
             proofValuesBytes: proofValuesBytes,
@@ -242,8 +241,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
             preconfRequestBType, signature
@@ -368,8 +365,6 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bytes32 challengeId = keccak256(signature);
-
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeBondInvalid.selector);
 
         taiyiInteractiveChallenger.createChallengeAType{ value: 0 }(
@@ -413,8 +408,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeBondInvalid.selector);
 
@@ -460,8 +453,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
             preconfRequestAType, signature
@@ -514,8 +505,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
             preconfRequestBType, signature
@@ -570,8 +559,6 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bytes32 challengeId = keccak256(signature);
-
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.TargetSlotNotInChallengeCreationWindow.selector
         );
@@ -622,8 +609,6 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bytes32 challengeId = keccak256(signature);
-
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.TargetSlotNotInChallengeCreationWindow.selector
         );
@@ -671,8 +656,6 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bytes32 challengeId = keccak256(signature);
-
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.BlockNotFinalized.selector);
 
         taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
@@ -718,8 +701,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.BlockNotFinalized.selector);
 
@@ -967,8 +948,6 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        bytes32 challengeId = keccak256(signature);
-
         taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
             preconfRequestAType, signature
         );
@@ -1020,8 +999,6 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        bytes32 challengeId = keccak256(signature);
 
         taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
             preconfRequestBType, signature

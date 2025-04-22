@@ -99,6 +99,7 @@ contract TaiyiCoreTest is Test {
         BlockspaceAllocation memory blockspaceAllocation
     )
         internal
+        view
         returns (PreconfRequestBType memory preconfRequestBType)
     {
         bytes32 blockspaceHash = blockspaceAllocation.getBlockspaceAllocationHash();
