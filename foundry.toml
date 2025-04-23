@@ -18,6 +18,7 @@
   via_ir = false
   ffi = true
 
+ignored_warnings_from = ["lib"]
 remappings = [
   "forge-std/=lib/forge-std/src/",
   "@openzeppelin-contracts/=lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/",
