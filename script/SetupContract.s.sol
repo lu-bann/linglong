@@ -112,38 +112,16 @@ contract SetupContract is Script, Test {
         IStrategy[] memory strategies = new IStrategy[](1);
         strategies[0] = IStrategy(wethStrategyAddr);
 
-        uint32 validatorOperatorSetId = eigenLayerMiddleware.createOperatorSet(strategies);
-        uint32 underwriterOperatorSetId =
-            eigenLayerMiddleware.createOperatorSet(strategies);
+        uint32 operatorSetId = eigenLayerMiddleware.createOperatorSet(strategies);
 
         OperatorSet memory opSet;
-        opSet.id = validatorOperatorSetId;
+        opSet.id = operatorSetId;
         opSet.avs = address(eigenLayerMiddleware);
 
         bool exists = allocationManager.isOperatorSet(opSet);
 
         assert(exists);
-
-        opSet.id = underwriterOperatorSetId;
-        opSet.avs = address(eigenLayerMiddleware);
-
-        exists = allocationManager.isOperatorSet(opSet);
-
-        assert(exists);
-        console.log("validator operator set id ", validatorOperatorSetId);
-        console.log("underwriter operator set id ", underwriterOperatorSetId);
-
-        vm.serializeUint(
-            "operatorSetId", "validatorOperatorSetId", validatorOperatorSetId
-        );
-        string memory operatorSetId = vm.serializeUint(
-            "operatorSetId", "underwriterOperatorSetId", underwriterOperatorSetId
-        );
-
-        string memory output = "output";
-        vm.serializeString(output, "operatorSetId", operatorSetId);
-        string memory finalJ = vm.serializeString(output, "operatorSetId", operatorSetId);
-        vm.writeJson(finalJ, "script/output/devnet/operatorSetId.json");
+        console.log("Operator set exists:", exists);
         vm.stopBroadcast();
     }
 }

@@ -232,7 +232,9 @@ library EigenLayerMiddlewareLib {
         }
 
         ITaiyiRegistryCoordinator.AllocatedOperatorSets memory operatorSetsIds =
-            registryCoordinator.getOperatorAllocatedOperatorSets(operator);
+        registryCoordinator.getOperatorAllocatedOperatorSets(
+            operator, ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
 
         operatorSets = new OperatorSet[](operatorSetsIds.eigenLayerSets.length);
         for (uint256 i = 0; i < operatorSetsIds.eigenLayerSets.length; i++) {

@@ -279,21 +279,15 @@ contract EigenLayerMiddleware is
                 .OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
         }
 
-        if (registrations.length != REGISTRY.getOperatorData(registrationRoot).numKeys) {
-            revert EigenLayerMiddlewareLib.InvalidRegistrationsLength();
-        }
+        // Use SlashingLib for validation checks
+        SlashingLib.validateRegistrationConditions(
+            REGISTRY, registrationRoot, registrations
+        );
 
-        if (delegationSignatures.length != registrations.length) {
-            revert EigenLayerMiddlewareLib.InvalidDelegationSignaturesLength();
-        }
-
-        if (REGISTRY.getOperatorData(registrationRoot).registeredAt == 0) {
-            revert EigenLayerMiddlewareLib.OperatorNotRegistered();
-        }
-
-        if (REGISTRY.isSlashed(registrationRoot)) {
-            revert EigenLayerMiddlewareLib.OperatorIsSlashed();
-        }
+        // Validate delegation signatures length
+        SlashingLib.validateDelegationSignaturesLength(
+            delegationSignatures, registrations
+        );
 
         SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,

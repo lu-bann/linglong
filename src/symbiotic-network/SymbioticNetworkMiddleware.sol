@@ -43,9 +43,9 @@ import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
 import { SlashingLib } from "../libs/SlashingLib.sol";
 import { SymbioticNetworkMiddlewareLib } from "../libs/SymbioticNetworkMiddlewareLib.sol";
 import { SymbioticNetworkStorage } from "../storage/SymbioticNetworkStorage.sol";
-
 import { DelegationStore } from "../types/CommonTypes.sol";
 import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
+import "forge-std/console.sol";
 
 /// @title SymbioticNetworkMiddleware
 /// @notice A unified middleware contract that manages both gateway and validator networks in the Symbiotic ecosystem
@@ -94,45 +94,24 @@ contract SymbioticNetworkMiddleware is
     }
 
     /// @notice Initialize the contract with required parameters and setup subnetworks
-    /// @param network The address of the network
-    /// @param slashingWindow The duration of the slashing window
-    /// @param vaultRegistry The address of the vault registry
-    /// @param operatorRegistry The address of the operator registry
-    /// @param operatorNetOptIn The address of the operator network opt-in service
-    /// @param reader The address of the reader contract used for delegatecall
     /// @param _owner The address of the contract owner
-    /// @param _registryCoordinator The address of the registry coordinator
-    /// @param _epochDuration The duration of the epoch
-    /// @param _registry The address of the URC Registry
-    /// @dev Calls BaseMiddleware.init and Subnetworks.registerSubnetwork
-    function initialize(
-        address network,
-        uint48 slashingWindow,
-        address vaultRegistry,
-        address operatorRegistry,
-        address operatorNetOptIn,
-        address reader,
-        address _owner,
-        address _registryCoordinator,
-        uint48 _epochDuration,
-        address _registry
-    )
-        external
-        initializer
-    {
+    /// @param _config Configuration struct containing all initialization parameters
+    /// @dev Calls BaseMiddleware.init and initializes all contract dependencies
+    function initialize(address _owner, Config calldata _config) external initializer {
         __BaseMiddleware_init(
-            network,
-            slashingWindow,
-            vaultRegistry,
-            operatorRegistry,
-            operatorNetOptIn,
-            reader
+            _config.network,
+            _config.slashingWindow,
+            _config.vaultRegistry,
+            _config.operatorRegistry,
+            _config.operatorNetOptIn,
+            _config.reader
         );
-        __EpochCapture_init(_epochDuration);
+        __EpochCapture_init(_config.epochDuration);
 
         owner = _owner;
-        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_registryCoordinator);
-        REGISTRY = _registry;
+        REGISTRY_COORDINATOR = ITaiyiRegistryCoordinator(_config.registryCoordinator);
+        REGISTRY = _config.registry;
+        SLASHER = address(ILinglongSlasher(_config.slasher));
     }
 
     // ==============================================================================================
@@ -140,10 +119,9 @@ contract SymbioticNetworkMiddleware is
     // ==============================================================================================
 
     /// @notice Creates a new subnetwork with the given ID
-    /// @param subnetworkId The ID of the subnetwork to create
-    function createNewSubnetwork(uint96 subnetworkId) external checkAccess {
-        require(subnetworkId > SUBNETWORK_COUNT, "Subnetwork already exists");
-        uint96 encodedSubnetworkId = subnetworkId.encodeOperatorSetId96(
+    /// @param baseSubnetworkId The ID of the base subnetwork to create
+    function createNewSubnetwork(uint96 baseSubnetworkId) external checkAccess {
+        uint96 encodedSubnetworkId = baseSubnetworkId.encodeOperatorSetId96(
             ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
         );
         super._registerSubnetwork(encodedSubnetworkId);
@@ -151,15 +129,13 @@ contract SymbioticNetworkMiddleware is
         SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
     }
 
-    /// @notice Register a new operator with the specified key, vault, and base subnetwork
+    /// @notice Register a new operator with the specified key and base subnetwork
     /// @dev Calls BaseOperators._registerOperatorImpl
     /// @param key The address key of the operator
-    /// @param vault The vault address associated with the operator
     /// @param signature The signature proving ownership of the key
     /// @param baseSubnetworks The base subnetwork identifier (VALIDATOR_SUBNETWORK or UNDERWRITER_SUBNETWORK)
     function registerOperator(
         bytes memory key,
-        address vault,
         bytes memory signature,
         uint96[] memory baseSubnetworks
     )
@@ -168,16 +144,11 @@ contract SymbioticNetworkMiddleware is
     {
         require(baseSubnetworks.length > 0, "Invalid subnetwork");
 
-        // Use library for key verification with signature
         SymbioticNetworkMiddlewareLib.verifyKey(msg.sender, key, signature);
 
         super._registerOperator(msg.sender);
         super._updateKey(msg.sender, key);
-        if (vault != address(0)) {
-            super._registerOperatorVault(msg.sender, vault);
-        }
 
-        // Register with registry coordinator
         SymbioticNetworkMiddlewareLib.registerOperatorWithCoordinator(
             REGISTRY_COORDINATOR, msg.sender, baseSubnetworks
         );
@@ -185,34 +156,13 @@ contract SymbioticNetworkMiddleware is
 
     /// @notice Register multiple validators for a single transaction
     /// @inheritdoc ISymbioticNetworkMiddleware
-    function registerValidators(
-        IRegistry.SignedRegistration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
+    function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable
         override
         onlyValidatorSubnetwork
         returns (bytes32 registrationRoot)
     {
-        // Validate registrations
-        require(
-            registrations.length == delegationSignatures.length,
-            "Invalid number of delegation signatures"
-        );
-
-        // Check operator registration status
-        SymbioticNetworkMiddlewareLib.validateRegistration(
-            REGISTRY_COORDINATOR,
-            VALIDATOR_SUBNETWORK,
-            UNDERWRITER_SUBNETWORK,
-            msg.sender,
-            delegateeAddress
-        );
-
         // Register with Registry
         registrationRoot = IRegistry(REGISTRY).register{ value: 0.11 ether }(
             registrations, address(this)
@@ -253,7 +203,7 @@ contract SymbioticNetworkMiddleware is
             IRegistry(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             registrationRoot,
-            msg.sender,
+            address(this),
             pubkeys,
             delegations
         );
@@ -272,6 +222,16 @@ contract SymbioticNetworkMiddleware is
         external
         override
     {
+        // Use SlashingLib to validate registration conditions
+        SlashingLib.validateRegistrationConditions(
+            IRegistry(REGISTRY), registrationRoot, registrations
+        );
+
+        // Validate delegation signatures length
+        SlashingLib.validateDelegationSignaturesLength(
+            delegationSignatures, registrations
+        );
+
         SlashingLib.DelegationParams memory params = _constructDelegationParams(
             registrationRoot,
             registrations,
@@ -280,12 +240,13 @@ contract SymbioticNetworkMiddleware is
             delegateeAddress,
             data
         );
+
         SlashingLib.optInToSlasher(
             IRegistry(REGISTRY),
             operatorDelegations[msg.sender][registrationRoot],
             operatorRegistrationRoots[msg.sender],
-            address(this), // TODO: change to slasher address
-            address(this),
+            address(SLASHER),
+            address(msg.sender),
             params
         );
     }

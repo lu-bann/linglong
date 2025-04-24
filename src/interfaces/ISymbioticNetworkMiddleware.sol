@@ -75,12 +75,10 @@ interface ISymbioticNetworkMiddleware {
 
     /// @notice Register an operator with a key, vault, and subnetworks
     /// @param key The operator's key
-    /// @param vault The vault address
     /// @param signature The signature proving ownership of the key
     /// @param subnetworks The subnetwork IDs
     function registerOperator(
         bytes memory key,
-        address vault,
         bytes memory signature,
         uint96[] memory subnetworks
     )
@@ -88,18 +86,8 @@ interface ISymbioticNetworkMiddleware {
 
     /// @notice Register validators for an operator
     /// @param registrations Array of validator registrations
-    /// @param delegationSignatures Array of delegation signatures
-    /// @param delegateePubKey The delegatee's public key
-    /// @param delegateeAddress The delegatee's address
-    /// @param data Additional data for registration
     /// @return registrationRoot The registration root
-    function registerValidators(
-        IRegistry.SignedRegistration[] calldata registrations,
-        BLS.G2Point[] calldata delegationSignatures,
-        BLS.G1Point calldata delegateePubKey,
-        address delegateeAddress,
-        bytes[] calldata data
-    )
+    function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable
         returns (bytes32 registrationRoot);
@@ -199,6 +187,21 @@ interface ISymbioticNetworkMiddleware {
         returns (uint96[] memory allocatedSubnetworks);
 
     // ========= STRUCTS =========
+
+    /// @notice Configuration parameters for contract initialization
+    /// @dev Used to simplify initialization and avoid stack too deep errors
+    struct Config {
+        address network;
+        uint48 slashingWindow;
+        address vaultRegistry;
+        address operatorRegistry;
+        address operatorNetOptIn;
+        address reader;
+        address registryCoordinator;
+        uint48 epochDuration;
+        address registry;
+        address slasher;
+    }
 
     /// @notice Parameters for slashing an operator
     struct SlashParams {

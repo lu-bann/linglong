@@ -50,8 +50,6 @@ import { PermissionController } from
 import { EmptyContract } from "./lib/EmptyContract.sol";
 import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
-import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol";
-
 contract Deploy is Script, Test {
     using stdStorage for StdStorage;
 
@@ -344,23 +342,21 @@ contract Deploy is Script, Test {
         ///###################################
 
         EigenLayerMiddleware eigenLayerMiddlewareImpl = new EigenLayerMiddleware();
-        IEigenLayerMiddleware.Config memory config = IEigenLayerMiddleware.Config({
-            avsDirectory: avsDirectory,
-            delegationManager: delegationManager,
-            rewardCoordinator: rewardCoordinator,
-            rewardInitiator: rewardInitiator,
-            registryCoordinator: address(taiyiRegistryCoordinatorProxy),
-            underwriterShareBips: 8000,
-            registry: urc,
-            slasher: address(linglongSlasherProxy),
-            allocationManager: allocationManager,
-            registrationMinCollateral: 0
-        });
         ProxyAdmin(eigenLayerMiddlewareProxyAdminAddress).upgradeAndCall(
             ITransparentUpgradeableProxy(address(eigenLayerMiddleware)),
             address(eigenLayerMiddlewareImpl),
             abi.encodeWithSelector(
-                EigenLayerMiddleware.initialize.selector, implOwner, config
+                EigenLayerMiddleware.initialize.selector,
+                implOwner,
+                avsDirectory,
+                delegationManager,
+                rewardCoordinator,
+                rewardInitiator,
+                taiyiRegistryCoordinatorProxy,
+                8000,
+                urc,
+                linglongSlasherProxy,
+                allocationManager
             )
         );
 

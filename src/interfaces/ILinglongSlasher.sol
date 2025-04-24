@@ -83,6 +83,10 @@ interface ILinglongSlasher is ISlasher {
     /// @param _eigenLayerMiddleware The address of the EigenLayer middleware
     function setEigenLayerMiddleware(address _eigenLayerMiddleware) external;
 
+    /// @notice Sets the Symbiotic middleware address
+    /// @param _symbioticMiddleware The address of the Symbiotic middleware
+    function setSymbioticMiddleware(address _symbioticMiddleware) external;
+
     /// @notice Sets URC commitment type to violation type mapping
     /// @param commitmentType The URC commitment type
     /// @param violationType The violation type

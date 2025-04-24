@@ -24,7 +24,7 @@ contract PreconTxTest is Test {
         (owner, ownerPrivatekey) = makeAddrAndKey("owner");
     }
 
-    function testPreconfRequestHashPreconfRequestAType() public view {
+    function testPreconfRequestHashPreconfRequestAType() public {
         string[] memory txs = new string[](1);
         txs[0] = "txs";
 

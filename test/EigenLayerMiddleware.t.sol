@@ -36,7 +36,6 @@ import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import { TransparentUpgradeableProxy } from
     "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { Strings } from "@openzeppelin/contracts/utils/Strings.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
@@ -49,7 +48,6 @@ import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol"
 import { ILinglongChallenger } from "src/interfaces/ILinglongChallenger.sol";
 import { IPubkeyRegistry } from "src/interfaces/IPubkeyRegistry.sol";
 
-import { G2Operations } from "./ffi/G2Operation.sol";
 import { ITaiyiInteractiveChallenger } from
     "src/interfaces/ITaiyiInteractiveChallenger.sol";
 import { ITaiyiRegistryCoordinator } from "src/interfaces/ITaiyiRegistryCoordinator.sol";
@@ -61,10 +59,8 @@ import { TaiyiRegistryCoordinator } from
     "src/operator-registries/TaiyiRegistryCoordinator.sol";
 import { LinglongSlasher } from "src/slasher/LinglongSlasher.sol";
 
-contract EigenlayerMiddlewareTest is Test, G2Operations {
+contract EigenlayerMiddlewareTest is Test {
     using OperatorSubsetLib for uint32;
-    using Strings for uint256;
-    using BN254 for BN254.G1Point;
 
     bytes32 public constant VIOLATION_TYPE_URC = keccak256("URC_VIOLATION");
     uint64 public constant COMMITMENT_TYPE_URC = 1;
@@ -89,8 +85,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     uint256 constant UNDERWRITER_SHARE_BIPS = 8000; // 80%
     uint256 constant _WAD = 1e18; // 1 WAD = 100% allocation (with underscore to fix linter)
 
-    uint32 public validatorOperatorSetId; // Store the operator set ID created in setUp
-    uint32 public underwriterOperatorSetId;
+    uint32 public operatorSetId; // Store the operator set ID created in setUp
 
     modifier impersonate(address user) {
         vm.startPrank(user);
@@ -105,10 +100,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     /// @notice Performs initial setup for the test environment by deploying and initializing contracts
     function setUp() public {
         proxyAdmin = makeAddr("proxyAdmin");
-        // Generate a random key by hashing block data
-        bytes32 randomBytes =
-            keccak256(abi.encodePacked(block.timestamp, block.prevrandao, block.number));
-        operatorSecretKey = uint256(randomBytes);
+
         registry = new Registry(
             IRegistry.Config({
                 minCollateralWei: 0.1 ether,
@@ -137,16 +129,13 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     function testOperatorRegistrationFlow() public {
         // 1. Setup and verify operator set
         OperatorSet memory opSet;
-        opSet.id = validatorOperatorSetId;
+        opSet.id = operatorSetId;
         opSet.avs = eigenLayerMiddleware;
         _verifyOperatorSetExists(opSet);
-        OperatorSet memory underwriterOpSet;
-        underwriterOpSet.id = underwriterOperatorSetId;
-        underwriterOpSet.avs = eigenLayerMiddleware;
-        _verifyOperatorSetExists(underwriterOpSet);
 
         // 2. Register operator
-        _registerOperator(operator, validatorOperatorSetId, operatorSecretKey);
+        bytes memory extraData = abi.encode(operatorBLSPubKey);
+        _registerOperator(operator, operatorSetId, extraData);
 
         // 3. Verify registration
         _verifyOperatorRegistrationInEigenLayer(operator);
@@ -161,102 +150,95 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         _verifyOperatorStake(operator);
 
         // 7. Remove strategies
-        _removeStrategiesAndVerify(validatorOperatorSetId, strategies, opSet);
+        _removeStrategiesAndVerify(operatorSetId, strategies, opSet);
 
         // 8. Test deregistration
-        _deregisterFromAVS(operator, validatorOperatorSetId);
+        _deregisterFromAVS(operator, operatorSetId);
         _verifyDeregistration(operator, opSet);
 
+        // 9. Create new operator set and verify count
+        _createOperatorSet();
         uint32 count = middleware.getOperatorSetCount();
         assertEq(count, 2, "Should have 2 operator sets");
     }
 
     function testValidatorRegistration() public {
         // Setup operators and give them funds
-        (
-            address primaryOp,
-            address underwriterOp,
-            uint256 primaryPrivate,
-            uint256 underwriterPrivate
-        ) = _setupOperatorsWithFunds();
+        (address primaryOp, address underwriterOp,,) = _setupOperatorsWithFunds();
 
         // Create BLS keys and register operators
-        _registerOperator(primaryOp, validatorOperatorSetId, primaryPrivate);
-        _registerOperator(underwriterOp, underwriterOperatorSetId, underwriterPrivate);
+        _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
 
         // Setup mocks and complete test
         _verifyOperatorRegistration(primaryOp, underwriterOp);
 
-        // Silence for CI
-        // Todo: fix ci
         // Register the validator
-        // bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
+        bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
     }
 
     // Silence for CI
     // Todo: fix ci
-    // function testSlashOperator() public {
-    //     // Setup operators and give them funds
-    //     (
-    //         address primaryOp,
-    //         address underwriterOp,
-    //         uint256 primaryOpKey,
-    //         uint256 underwriterOpKey
-    //     ) = _setupOperatorsWithFunds();
+    function testSlashOperator() public {
+        // Setup operators and give them funds
+        (
+            address primaryOp,
+            address underwriterOp,
+            uint256 primaryOpKey,
+            uint256 underwriterOpKey
+        ) = _setupOperatorsWithFunds();
 
-    //     // Create BLS keys and register operators
-    //     _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
+        // Create BLS keys and register operators
+        _registerOperatorsWithUniqueKeys(primaryOp, underwriterOp);
 
-    //     // Verify operator registration
-    //     _verifyOperatorRegistration(primaryOp, underwriterOp);
+        // Verify operator registration
+        _verifyOperatorRegistration(primaryOp, underwriterOp);
 
-    //     // Register validator and complete opt-in to slasher
-    //     //bytes32 registrationRoot = _setupValidatorWithSlasher(primaryOp, underwriterOp);
-    //     bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
+        // Register validator and complete opt-in to slasher
+        bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
 
-    //     // Create a mock commitment for slashing
-    //     ISlasher.SignedCommitment memory commitment = _createMockCommitment(
-    //         registrationRoot, primaryOp, underwriterOp, primaryOpKey, underwriterOpKey
-    //     );
+        // Create a mock commitment for slashing
+        ISlasher.SignedCommitment memory commitment = _createMockCommitment(
+            registrationRoot, primaryOp, underwriterOp, primaryOpKey, underwriterOpKey
+        );
 
-    //     // Create evidence bytes
-    //     bytes memory evidence = abi.encode("mock evidence data");
+        // Create evidence bytes
+        bytes memory evidence = abi.encode("mock evidence data");
 
-    //     challenger = address(new MockLinglongChallenger());
+        challenger = address(new MockLinglongChallenger());
 
-    //     // Make sure the challenger is set up
-    //     vm.startPrank(owner);
-    //     slasher.registerChallenger(challenger);
-    //     slasher.setURCCommitmentTypeToViolationType(
-    //         COMMITMENT_TYPE_URC, VIOLATION_TYPE_URC
-    //     );
-    //     vm.stopPrank();
+        // Make sure the challenger is set up
+        vm.startPrank(owner);
+        slasher.registerChallenger(challenger);
+        slasher.setURCCommitmentTypeToViolationType(
+            COMMITMENT_TYPE_URC, VIOLATION_TYPE_URC
+        );
+        vm.stopPrank();
 
-    //     // Set up the challenger for instant slashing to simplify testing
-    //     MockLinglongChallenger(challenger).setIsInstantSlashing(true);
+        // Set up the challenger for instant slashing to simplify testing
+        MockLinglongChallenger(challenger).setIsInstantSlashing(true);
 
-    //     // Mock necessary functions for slashing to work
-    //     vm.startPrank(owner);
-    //     slasher.setEigenLayerMiddleware(eigenLayerMiddleware);
-    //     slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
-    //     vm.stopPrank();
+        // Mock necessary functions for slashing to work
+        vm.startPrank(owner);
+        slasher.setEigenLayerMiddleware(eigenLayerMiddleware);
+        slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
+        vm.stopPrank();
 
-    //     // Perform the slashing via the Registry
-    //     vm.startPrank(challenger);
-    //     uint256 slashAmount =
-    //         registry.slashCommitment(registrationRoot, commitment, evidence);
-    //     vm.stopPrank();
+        // Perform the slashing via the Registry
+        vm.startPrank(challenger);
+        uint256 slashAmount =
+            registry.slashCommitment(registrationRoot, commitment, evidence);
+        vm.stopPrank();
 
-    //     // Verify the slashing was successful
-    //     assertTrue(registry.isSlashed(registrationRoot), "Operator should be slashed");
-    //     assertEq(
-    //         registry.getOperatorData(registrationRoot).slashedAt > 0,
-    //         true,
-    //         "Slashing timestamp should be set"
-    //     );
+        // Verify the slashing was successful
+        assertTrue(registry.isSlashed(registrationRoot), "Operator should be slashed");
+        assertEq(
+            registry.getOperatorData(registrationRoot).slashedAt > 0,
+            true,
+            "Slashing timestamp should be set"
+        );
 
-    //     console.log("Slashing successful with amount:", slashAmount);
-    // }
+        console.log("Slashing successful with amount:", slashAmount);
+    }
 
     // ==============================================================================================
     // ====================================== SETUP HELPERS ========================================
@@ -438,24 +420,18 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
 
         // Create the operator set directly through middleware
         vm.startPrank(owner);
-        validatorOperatorSetId = middleware.createOperatorSet(strategies);
-        underwriterOperatorSetId = middleware.createOperatorSet(strategies);
+        operatorSetId = middleware.createOperatorSet(strategies);
         vm.stopPrank();
 
-        console.log("Created validator operator set with ID:", validatorOperatorSetId);
-        console.log("Created underwriter operator set with ID:", underwriterOperatorSetId);
+        console.log("Created operator set with ID:", operatorSetId);
+
         // Verify the operator set exists
         OperatorSet memory opSet;
-        opSet.id = validatorOperatorSetId;
+        opSet.id = operatorSetId;
         opSet.avs = eigenLayerMiddleware;
 
         bool exists = eigenLayerDeployer.allocationManager().isOperatorSet(opSet);
-        assertTrue(exists, "Validator Operator set should exist");
-
-        opSet.id = underwriterOperatorSetId;
-        opSet.avs = eigenLayerMiddleware;
-        exists = eigenLayerDeployer.allocationManager().isOperatorSet(opSet);
-        assertTrue(exists, "Underwriter Operator set should exist");
+        assertTrue(exists, "Operator set should exist");
     }
 
     /// @dev Setup operators and give them ETH and WETH
@@ -488,44 +464,30 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     // ====================================== TEST HELPERS =========================================
     // ==============================================================================================
 
-    function _signMessage(
-        address signer,
-        uint256 privateKey
-    )
-        internal
-        view
-        returns (BN254.G1Point memory)
-    {
-        BN254.G1Point memory messageHash =
-            registryCoordinator.pubkeyRegistrationMessageHash(signer);
-        return BN254.scalar_mul(messageHash, privateKey);
-    }
-
-    function _verifyOperatorSetExists(OperatorSet memory opSet) internal view {
+    function _verifyOperatorSetExists(OperatorSet memory opSet) internal {
         assertTrue(
             eigenLayerDeployer.allocationManager().isOperatorSet(opSet),
             "Operator set should exist"
         );
     }
 
-    function _verifyOperatorRegistrationInEigenLayer(address _operator) internal view {
+    function _verifyOperatorRegistrationInEigenLayer(address operator) internal {
         assertTrue(
-            eigenLayerDeployer.delegation().isOperator(_operator),
+            eigenLayerDeployer.delegation().isOperator(operator),
             "Operator should be registered in EigenLayer"
         );
     }
 
     function _verifyOperatorAllocation(
-        address _operator,
+        address operator,
         OperatorSet memory opSet
     )
         internal
-        view
         returns (IStrategy[] memory)
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         assertTrue(
-            allocationManager.isMemberOfOperatorSet(_operator, opSet),
+            allocationManager.isMemberOfOperatorSet(operator, opSet),
             "Operator should be a member of the operator set"
         );
 
@@ -535,7 +497,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
 
         IAllocationManagerTypes.Allocation memory allocation =
-            allocationManager.getAllocation(_operator, opSet, strategies[0]);
+            allocationManager.getAllocation(operator, opSet, strategies[0]);
 
         assertEq(allocation.currentMagnitude, uint64(_WAD), "Wrong allocation magnitude");
         assertEq(int256(allocation.pendingDiff), 0, "Should have no pending diff");
@@ -544,17 +506,16 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _verifyOperatorInOperatorSet(
-        address _operator,
+        address operator,
         OperatorSet memory opSet
     )
         internal
-        view
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         address[] memory members = allocationManager.getMembers(opSet);
         bool operatorFound = false;
         for (uint256 i = 0; i < members.length; i++) {
-            if (members[i] == _operator) {
+            if (members[i] == operator) {
                 operatorFound = true;
                 break;
             }
@@ -572,16 +533,16 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertEq(baseOperatorSetId, uint32(0), "Operator set ID should match");
     }
 
-    function _verifyOperatorStake(address _operator) internal view {
+    function _verifyOperatorStake(address operator) internal {
         (IStrategy[] memory strategies, uint256[] memory stakeAmounts) =
-            middleware.getStrategiesAndStakes(_operator);
+            middleware.getStrategiesAndStakes(operator);
         assertEq(strategies.length, 1, "Should have 1 strategy in operator set");
         assertEq(
             stakeAmounts[0], STAKE_AMOUNT, "Should have 1 stake amount in operator set"
         );
 
         uint32 count = middleware.getOperatorSetCount();
-        assertEq(count, 2, "Should have 2 operator set");
+        assertEq(count, 1, "Should have 1 operator set");
     }
 
     function _verifyOperatorRegistration(
@@ -610,7 +571,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         );
 
         // 2. Verify they are members of the operatorSet
-        (, uint32 opSetId) = underwriterOperatorSetId.decodeOperatorSetId32();
+        (, uint32 opSetId) = operatorSetId.decodeOperatorSetId32();
         address[] memory opSetMembers =
             registryCoordinator.getEigenLayerOperatorSetOperators(opSetId);
 
@@ -636,25 +597,19 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         );
     }
 
-    function _verifyDeregistration(
-        address _operator,
-        OperatorSet memory opSet
-    )
-        internal
-        view
-    {
+    function _verifyDeregistration(address operator, OperatorSet memory opSet) internal {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         assertFalse(
-            allocationManager.isMemberOfOperatorSet(_operator, opSet),
+            allocationManager.isMemberOfOperatorSet(operator, opSet),
             "Operator should no longer be a member of the operator set after deregistration"
         );
 
         // Check the operator is still in the allocated sets (deallocation pending)
-        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(_operator);
+        OperatorSet[] memory allocatedSets = allocationManager.getAllocatedSets(operator);
         bool stillAllocated = false;
         for (uint256 i = 0; i < allocatedSets.length; i++) {
             if (
-                allocatedSets[i].id == validatorOperatorSetId
+                allocatedSets[i].id == operatorSetId
                     && allocatedSets[i].avs == eigenLayerMiddleware
             ) {
                 stillAllocated = true;
@@ -674,7 +629,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     function _registerOperator(
         address _operator,
         uint32 _opSetId,
-        uint256 operatorSecret
+        bytes memory extraData
     )
         internal
     {
@@ -688,7 +643,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         _allocateStakeToAVS(_operator, _opSetId);
 
         // 4. Register for the operator set (step 2 of AVS opt-in)
-        _registerForOperatorSets(_operator, _opSetId, operatorSecret);
+        _registerForOperatorSets(_operator, _opSetId, extraData);
     }
 
     function _registerOperatorInEigenLayer(address _operator) internal {
@@ -700,6 +655,31 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
             "https://taiyi.xyz/metadata"
         );
         vm.stopPrank();
+    }
+
+    function _registerOperatorsWithUniqueKeys(
+        address primaryOp,
+        address underwriterOp
+    )
+        internal
+    {
+        bytes memory primaryOpBLSPubKey = new bytes(48);
+        for (uint256 i = 0; i < 48; i++) {
+            primaryOpBLSPubKey[i] = 0xaa; // Different value from the default 0xab
+        }
+
+        bytes memory underwriterOpBLSPubKey = new bytes(48);
+        for (uint256 i = 0; i < 48; i++) {
+            underwriterOpBLSPubKey[i] = 0xcc; // Different value from both default and primaryOp
+        }
+
+        // Register operators with different BLS pubkeys
+        _registerOperator(primaryOp, operatorSetId, abi.encode(primaryOpBLSPubKey));
+        // Add unerwrite operator set
+        _createOperatorSet();
+        _registerOperator(
+            underwriterOp, operatorSetId, abi.encode(underwriterOpBLSPubKey)
+        );
     }
 
     // ==============================================================================================
@@ -778,7 +758,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     function _registerForOperatorSets(
         address _operator,
         uint32 _opSetId,
-        uint256 operatorSecret
+        bytes memory extraData
     )
         internal
         impersonate(_operator)
@@ -793,14 +773,36 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         // In a real scenario, these would be generated from a private key
         IPubkeyRegistry.PubkeyRegistrationParams memory params;
 
+        // Use the extraData to derive unique pubkeys for each operator
+        // The extraData contains the BLS pubkey that we set differently for each operator
+        bytes memory blsPubKey = abi.decode(extraData, (bytes));
+
+        // Use the first byte from the BLS pubkey to create unique pubkey values
+        uint256 uniqueMultiplier = uint256(uint8(blsPubKey[0]));
+
         // Create G1 point for the pubkey using BN254 library
-        params.pubkeyG1 = BN254.generatorG1().scalar_mul(operatorSecret);
+        params.pubkeyG1 = BN254.G1Point({
+            X: 1_234_567_890_123_456_789_012_345_678_901_234_567_890 * uniqueMultiplier,
+            Y: 9_876_543_210_987_654_321_098_765_432_109_876_543_210 * uniqueMultiplier
+        });
 
         // Create G2 point for the pubkey using BN254 library
-        params.pubkeyG2 = mul(operatorSecret);
+        params.pubkeyG2 = BN254.G2Point({
+            X: [
+                uint256(11_111_111_111_111_111_111_111_111_111_111_111_111) * uniqueMultiplier,
+                uint256(22_222_222_222_222_222_222_222_222_222_222_222_222) * uniqueMultiplier
+            ],
+            Y: [
+                uint256(33_333_333_333_333_333_333_333_333_333_333_333_333) * uniqueMultiplier,
+                uint256(44_444_444_444_444_444_444_444_444_444_444_444_444) * uniqueMultiplier
+            ]
+        });
 
         // Create a signature point using BN254 library
-        params.pubkeyRegistrationSignature = _signMessage(_operator, operatorSecret);
+        params.pubkeyRegistrationSignature = BN254.G1Point({
+            X: 5_555_555_555_555_555_555_555_555_555_555_555_555_555 * uniqueMultiplier,
+            Y: 6_666_666_666_666_666_666_666_666_666_666_666_666_666 * uniqueMultiplier
+        });
 
         bytes memory formattedData = abi.encode(socket, params);
 
@@ -817,7 +819,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _removeStrategiesAndVerify(
-        uint32 _operatorSetId,
+        uint32 operatorSetId,
         IStrategy[] memory strategies,
         OperatorSet memory opSet
     )
@@ -825,7 +827,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     {
         IAllocationManager allocationManager = eigenLayerDeployer.allocationManager();
         vm.startPrank(owner);
-        middleware.removeStrategiesFromOperatorSet(_operatorSetId, strategies);
+        middleware.removeStrategiesFromOperatorSet(operatorSetId, strategies);
         vm.stopPrank();
 
         IStrategy[] memory remainingStrategies =
@@ -865,6 +867,10 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         internal
         returns (bytes32)
     {
+        // Create BLS keys and signatures for registration
+        uint256 validatorPrivKey1 = 12_345; // Use a deterministic private key for testing
+        uint256 validatorPrivKey2 = 67_890; // Second validator key
+
         // Create registrations array with validator public keys
         IRegistry.SignedRegistration[] memory registrations =
             new IRegistry.SignedRegistration[](2);
@@ -1096,14 +1102,13 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _createMockCommitment(
-        bytes32, /*registrationRoot*/
+        bytes32 registrationRoot,
         address primaryOp,
-        address, /*underwriterOp*/
+        address underwriterOp,
         uint256 primaryOpKey,
-        uint256 /*underwriterOpKey*/
+        uint256 underwriterOpKey
     )
         internal
-        view
         returns (ISlasher.SignedCommitment memory)
     {
         // Create a challenge struct that the slasher expects
@@ -1133,11 +1138,6 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         (uint8 v, bytes32 r, bytes32 s) =
             vm.sign(primaryOpKey, keccak256(abi.encode(commitment)));
         bytes memory signature = abi.encodePacked(r, s, v);
-
-        // Update the slasher's committer mapping to recognize this address
-        // vm.startPrank(address(middleware));
-        // registry.optInToSlasher(registrationRoot, address(slasher), underwriter);
-        // vm.stopPrank();
 
         return ISlasher.SignedCommitment({ commitment: commitment, signature: signature });
     }
