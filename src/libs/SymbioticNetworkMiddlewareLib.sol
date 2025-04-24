@@ -16,6 +16,8 @@ import { DelegationStore } from "../types/CommonTypes.sol";
 import { ECDSALib } from "./ECDSALib.sol";
 import { OperatorSubsetLib } from "./OperatorSubsetLib.sol";
 import { SafeCast96To32Lib } from "./SafeCast96To32Lib.sol";
+
+import { SafeCast96To32Lib } from "./SafeCast96To32Lib.sol";
 import { Subnetworks } from "@symbiotic-middleware-sdk/extensions/Subnetworks.sol";
 import { Subnetwork } from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
@@ -26,6 +28,7 @@ library SymbioticNetworkMiddlewareLib {
     using OperatorSubsetLib for uint96;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
     using SafeCast96To32Lib for uint96[];
+    using SafeCast96To32Lib for uint96;
 
     // Custom errors
     error InvalidSignature();
@@ -35,6 +38,9 @@ library SymbioticNetworkMiddlewareLib {
     error OperatorNotRegistered();
     error OperatorIsNotYetRegisteredInValidatorOperatorSet();
     error OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
+    error InvalidRegistrationsLength();
+    error InvalidDelegationSignaturesLength();
+    error OperatorIsSlashed();
 
     /// @notice Register an operator with the registry coordinator
     /// @param registryCoordinator The registry coordinator
@@ -47,51 +53,16 @@ library SymbioticNetworkMiddlewareLib {
     )
         internal
     {
-        uint96[] memory subnetworkIds = new uint96[](baseSubnetworks.length);
+        // Create a direct uint32 array for IAVSRegistrar compatibility
+        uint32[] memory compatibleIds = new uint32[](baseSubnetworks.length);
+
         for (uint256 i = 0; i < baseSubnetworks.length; i++) {
-            subnetworkIds[i] = baseSubnetworks[i].encodeOperatorSetId96(
-                ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
-            );
+            // Use the specialized function that ensures values stay within uint32 bounds
+            compatibleIds[i] = baseSubnetworks[i].toUint32();
         }
 
-        registryCoordinator.registerOperator(
-            operator, subnetworkIds.toUint32Array(), bytes("")
-        );
-    }
-
-    /// @notice Validate registration conditions for operators
-    /// @param registryCoordinator The registry coordinator
-    /// @param validatorSubnetworkId Validator subnetwork ID
-    /// @param underwriterSubnetworkId Underwriter subnetwork ID
-    /// @param operator The operator address
-    /// @param delegateeAddress The delegatee address
-    function validateRegistration(
-        ITaiyiRegistryCoordinator registryCoordinator,
-        uint96 validatorSubnetworkId,
-        uint96 underwriterSubnetworkId,
-        address operator,
-        address delegateeAddress
-    )
-        internal
-        view
-    {
-        // Check if operator is registered in validator subnetwork
-        if (
-            registryCoordinator.isSymbioticOperatorInSubnetwork(
-                validatorSubnetworkId, operator
-            )
-        ) {
-            revert OperatorIsNotYetRegisteredInValidatorOperatorSet();
-        }
-
-        // Check if delegatee is registered in underwriter subnetwork
-        if (
-            registryCoordinator.isSymbioticOperatorInSubnetwork(
-                underwriterSubnetworkId, delegateeAddress
-            )
-        ) {
-            revert OperatorIsNotYetRegisteredInUnderwriterOperatorSet();
-        }
+        // Pass the compatible uint32 array directly
+        registryCoordinator.registerOperator(operator, compatibleIds, bytes(""));
     }
 
     /// @notice Verify an operator's key
@@ -225,23 +196,40 @@ library SymbioticNetworkMiddlewareLib {
         returns (uint96[] memory allocatedSubnetworks)
     {
         uint96[] memory subnetworks = registryCoordinator.getSymbioticSubnetworks();
-        allocatedSubnetworks = new uint96[](subnetworks.length);
+
+        // First allocate a temporary array to hold all potential subnetworks
+        uint96[] memory tempAllocated = new uint96[](subnetworks.length);
         uint256 allocatedCount = 0;
 
+        // First pass: Add all allocated subnetworks to the temporary array
         for (uint256 i = 0; i < subnetworks.length; i++) {
+            (, uint96 subnetworkId) = subnetworks[i].decodeOperatorSetId96();
             if (
                 registryCoordinator.isSymbioticOperatorInSubnetwork(
-                    subnetworks[i], operator
+                    subnetworkId, operator
                 )
             ) {
-                allocatedSubnetworks[allocatedCount] = subnetworks[i];
-                allocatedCount++;
+                // Check if this subnetworkId is already in the array
+                bool isDuplicate = false;
+                for (uint256 j = 0; j < allocatedCount; j++) {
+                    if (tempAllocated[j] == subnetworkId) {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+
+                // Only add if not a duplicate
+                if (!isDuplicate) {
+                    tempAllocated[allocatedCount] = subnetworkId;
+                    allocatedCount++;
+                }
             }
         }
 
-        // Resize the array to the actual count
-        assembly {
-            mstore(allocatedSubnetworks, allocatedCount)
+        // Create the final array with the correct size
+        allocatedSubnetworks = new uint96[](allocatedCount);
+        for (uint256 i = 0; i < allocatedCount; i++) {
+            allocatedSubnetworks[i] = tempAllocated[i];
         }
 
         return allocatedSubnetworks;

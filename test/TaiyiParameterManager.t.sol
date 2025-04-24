@@ -55,7 +55,7 @@ contract TaiyiParameterManagerTest is Test {
     // =========================================
     //  Test: Verify initialization parameters
     // =========================================
-    function testInitialization() public view {
+    function testInitialization() public {
         assertEq(taiyiParameterManager.owner(), owner);
         assertEq(taiyiParameterManager.challengeBond(), 1);
         assertEq(taiyiParameterManager.challengeMaxDuration(), 64);
