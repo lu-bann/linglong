@@ -7,7 +7,6 @@ import { BN254 } from "../libs/BN254.sol";
 import { PubkeyRegistryStorage } from "../storage/PubkeyRegistryStorage.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-import { console } from "forge-std/console.sol";
 
 contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     using BN254 for BN254.G1Point;

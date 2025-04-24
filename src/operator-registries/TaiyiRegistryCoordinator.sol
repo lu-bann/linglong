@@ -42,7 +42,6 @@ import { ISymbioticNetworkMiddleware } from
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 
 import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
-import "forge-std/console.sol";
 
 /// @title A `TaiyiRegistryCoordinator` that has two registries:
 ///      1) a `PubkeyRegistry` that keeps track of operators' public keys
@@ -401,29 +400,35 @@ contract TaiyiRegistryCoordinator is
     /// @notice Returns all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch
     /// @return sets The allocated operator sets
-    function getOperatorAllocatedOperatorSets(address operator)
+    function getOperatorAllocatedOperatorSets(
+        address operator,
+        RestakingProtocol protocol
+    )
         external
         view
         returns (AllocatedOperatorSets memory sets)
     {
-        // // Get Symbiotic subnetwork (uint96)
-        // uint96[] memory symbioticSubnetworkIds = ISymbioticNetworkMiddleware(
-        //     symbioticMiddleware
-        // ).getOperatorAllocatedSubnetworks(operator);
+        if (protocol == RestakingProtocol.SYMBIOTIC) {
+            // Get Symbiotic subnetwork (uint96)
+            uint96[] memory symbioticSubnetworkIds = ISymbioticNetworkMiddleware(
+                symbioticMiddleware
+            ).getOperatorAllocatedSubnetworks(operator);
 
-        // // Initialize the symbioticSets array
-        // sets.symbioticSets = new uint96[](symbioticSubnetworkIds.length);
-        // for (uint256 i = 0; i < symbioticSubnetworkIds.length; i++) {
-        //     sets.symbioticSets[i] = symbioticSubnetworkIds[i];
-        // }
+            // Initialize the symbioticSets array
+            sets.symbioticSets = new uint96[](symbioticSubnetworkIds.length);
+            for (uint256 i = 0; i < symbioticSubnetworkIds.length; i++) {
+                sets.symbioticSets[i] = symbioticSubnetworkIds[i];
+            }
+        } else if (protocol == RestakingProtocol.EIGENLAYER) {
+            // Get EigenLayer operator sets (uint32)
+            OperatorSet[] memory eigenLayerSets =
+                allocationManager.getAllocatedSets(operator);
 
-        // Get EigenLayer operator sets (uint32)
-        OperatorSet[] memory eigenLayerSets = allocationManager.getAllocatedSets(operator);
-
-        // Initialize the eigenLayerSets array
-        sets.eigenLayerSets = new uint32[](eigenLayerSets.length);
-        for (uint256 i = 0; i < eigenLayerSets.length; i++) {
-            sets.eigenLayerSets[i] = eigenLayerSets[i].id;
+            // Initialize the eigenLayerSets array
+            sets.eigenLayerSets = new uint32[](eigenLayerSets.length);
+            for (uint256 i = 0; i < eigenLayerSets.length; i++) {
+                sets.eigenLayerSets[i] = eigenLayerSets[i].id;
+            }
         }
 
         return sets;
@@ -753,12 +758,12 @@ contract TaiyiRegistryCoordinator is
     }
 
     /// @notice Register an operator for the Symbiotic protocol
-    /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs
+    /// @dev Handles mapping of base subnetwork ID to appropriate operator set IDs
     /// @param operator The operator to register
-    /// @param subnetworkIds The subnetwork ID (will be mapped to operator sets)
+    /// @param baseSubnetworkIds The base subnetwork ID (will be mapped to operator sets)
     function _registerOperatorForSymbiotic(
         address operator,
-        uint96[] memory subnetworkIds,
+        uint96[] memory baseSubnetworkIds,
         bytes calldata /*data*/
     )
         internal
@@ -770,9 +775,14 @@ contract TaiyiRegistryCoordinator is
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
 
-        // Use the library function to add operator to sets
+        uint96[] memory operatorSetIds = new uint96[](baseSubnetworkIds.length);
+        for (uint256 i = 0; i < baseSubnetworkIds.length; i++) {
+            operatorSetIds[i] =
+                baseSubnetworkIds[i].encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC);
+        }
+
         _operatorSets.addOperatorToSets96(
-            subnetworkIds, RestakingProtocol.SYMBIOTIC, operator
+            operatorSetIds, RestakingProtocol.SYMBIOTIC, operator
         );
     }
 

@@ -28,6 +28,8 @@ library SlashingLib {
     error OperatorFraudProofPeriodNotOver();
     error OperatorSlashed();
     error PubKeyNotFound();
+    error InvalidRegistrationsLength();
+    error InvalidDelegationSignaturesLength();
 
     // ==============================================================================================
     // ================================= STRUCTS ==================================================
@@ -204,6 +206,53 @@ library SlashingLib {
             if (storedHash == pubkeyHash) {
                 delegationStore.delegations[pubkeyHash] = delegations[i];
             }
+        }
+    }
+
+    // ==============================================================================================
+    // ================================= VALIDATION FUNCTIONS =======================================
+    // ==============================================================================================
+
+    /// @notice Validate registration conditions for operators
+    /// @param registry The registry contract
+    /// @param registrationRoot The registration root
+    /// @param registrations Array of signed registrations
+    function validateRegistrationConditions(
+        IRegistry registry,
+        bytes32 registrationRoot,
+        IRegistry.SignedRegistration[] calldata registrations
+    )
+        public
+        view
+    {
+        // Check if the number of registrations matches the number of keys
+        if (registrations.length != registry.getOperatorData(registrationRoot).numKeys) {
+            revert InvalidRegistrationsLength();
+        }
+
+        // Check if operator is registered
+        if (registry.getOperatorData(registrationRoot).registeredAt == 0) {
+            revert OperatorNotRegistered();
+        }
+
+        // Check if operator is slashed
+        if (registry.isSlashed(registrationRoot)) {
+            revert OperatorSlashed();
+        }
+    }
+
+    /// @notice Validate delegation signatures length
+    /// @param delegationSignatures Array of delegation signatures
+    /// @param registrations Array of signed registrations
+    function validateDelegationSignaturesLength(
+        BLS.G2Point[] calldata delegationSignatures,
+        IRegistry.SignedRegistration[] calldata registrations
+    )
+        public
+        pure
+    {
+        if (delegationSignatures.length != registrations.length) {
+            revert InvalidDelegationSignaturesLength();
         }
     }
 
