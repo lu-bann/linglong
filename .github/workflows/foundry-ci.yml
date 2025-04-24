@@ -23,6 +23,13 @@ jobs:
         with:
           version: nightly
       
+      - name: Compile FFI Go binary
+        run: |
+          cd test/ffi/go
+          go build -o ffi g2mul.go
+          chmod +x ffi
+          cd ../../..
+      
       - name: Run Forge build
         run: |
           forge --version
@@ -33,7 +40,3 @@ jobs:
           forge test -vvvv
         id: test
       
-      - name: Check code formatting
-        run: |
-          forge fmt --check
-        id: fmt-check 

@@ -231,8 +231,12 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Get all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch
+    /// @param protocol The protocol to query
     /// @return allocatedSetsIdes Array of operator set IDs that the operator has allocated magnitude to
-    function getOperatorAllocatedOperatorSets(address operator)
+    function getOperatorAllocatedOperatorSets(
+        address operator,
+        RestakingProtocol protocol
+    )
         external
         view
         returns (AllocatedOperatorSets memory allocatedSetsIdes);

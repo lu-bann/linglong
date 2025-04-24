@@ -77,6 +77,15 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         EIGENLAYER_MIDDLEWARE = _eigenLayerMiddleware;
     }
 
+    /// @inheritdoc ILinglongSlasher
+    function setSymbioticMiddleware(address _symbioticMiddleware)
+        external
+        override
+        onlyOwner
+    {
+        SYMBIOTIC_MIDDLEWARE = _symbioticMiddleware;
+    }
+
     /// @notice Sets the TaiyiRegistryCoordinator address
     /// @param _registryCoordinator The address of the TaiyiRegistryCoordinator
     function setTaiyiRegistryCoordinator(address _registryCoordinator)
@@ -216,11 +225,18 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
     {
         ITaiyiRegistryCoordinator.AllocatedOperatorSets memory operatorSets =
         ITaiyiRegistryCoordinator(TAIYI_REGISTRY_COORDINATOR)
-            .getOperatorAllocatedOperatorSets(operator);
+            .getOperatorAllocatedOperatorSets(
+            operator, ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
 
         if (operatorSets.eigenLayerSets.length > 0) {
             return EIGENLAYER_MIDDLEWARE;
         }
+
+        operatorSets = ITaiyiRegistryCoordinator(TAIYI_REGISTRY_COORDINATOR)
+            .getOperatorAllocatedOperatorSets(
+            operator, ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
+        );
 
         if (operatorSets.symbioticSets.length > 0) {
             return SYMBIOTIC_MIDDLEWARE;

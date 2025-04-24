@@ -94,6 +94,32 @@ library OperatorSubsetLib {
         return protocolBits | baseId;
     }
 
+    /// @notice Encodes a protocol type and base ID into a single ID using uint32 for IAVSRegistrar compatibility
+    /// @dev Special version that constrains both the protocol and base ID to ensure the result fits in uint32
+    /// @param baseId The original operator set ID (must be < 2^27)
+    /// @param protocol The restaking protocol type
+    /// @return The encoded operator set ID with protocol information as uint32, safe for IAVSRegistrar
+    function encodeOperatorSetIdForIAVS(
+        uint96 baseId,
+        ITaiyiRegistryCoordinator.RestakingProtocol protocol
+    )
+        internal
+        pure
+        returns (uint32)
+    {
+        // For IAVSRegistrar compatibility, we must ensure the base ID is small
+        // Limit to 27 bits (2^27-1 = 134,217,727) to leave room for protocol
+        if (baseId > ID_MASK_32) {
+            revert OperatorSetLib__IdTooLarge32();
+        }
+
+        // Convert protocol enum to uint32 and shift to the reserved bits position
+        uint32 protocolBits = (uint32(uint8(protocol)) << PROTOCOL_SHIFT_32);
+
+        // Combine the protocol bits with the base ID
+        return protocolBits | uint32(baseId);
+    }
+
     /// @notice Decodes a uint96 operator set ID to extract the protocol type and base ID
     /// @dev Works with uint96 encoded IDs (5 bits protocol, 91 bits baseId)
     /// @param encodedId The encoded operator set ID as uint96
@@ -134,6 +160,19 @@ library OperatorSubsetLib {
         baseId = encodedId & ID_MASK_32;
 
         return (protocol, baseId);
+    }
+
+    /// @notice Decodes an encoded uint32 operator set ID back to its original uint96 baseId
+    /// @dev Extracts the baseId part from the encoded ID, removing protocol information
+    /// @param encodedId The encoded operator set ID with protocol information
+    /// @return The original baseId as uint96
+    function decodeOperatorSetIdFromIAVS(uint32 encodedId)
+        internal
+        pure
+        returns (uint96)
+    {
+        // Extract only the baseId bits by masking out the protocol bits
+        return uint96(encodedId & ID_MASK_32);
     }
 
     /// @notice Gets just the protocol type from a uint96 encoded operator set ID

@@ -26,6 +26,9 @@ abstract contract SymbioticNetworkStorage is ISymbioticNetworkMiddleware {
     /// @notice Owner of the contract
     address public owner;
 
+    /// @notice Address of the slasher contract
+    address public SLASHER;
+
     /// @notice Total count of subnetworks
     uint96 public SUBNETWORK_COUNT;
 
