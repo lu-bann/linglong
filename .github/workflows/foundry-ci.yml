@@ -23,6 +23,18 @@ jobs:
         with:
           version: nightly
       
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Compile FFI Go binary
+        run: |
+          cd test/ffi/go
+          go build -o ffi g2mul.go
+          chmod +x ffi
+          cd ../../..
+      
       - name: Run Forge build
         run: |
           forge --version
