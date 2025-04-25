@@ -46,7 +46,6 @@ import "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { EigenLayerMiddleware } from "src/eigenlayer-avs/EigenLayerMiddleware.sol";
 import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol";
-import { ILinglongChallenger } from "src/interfaces/ILinglongChallenger.sol";
 import { IPubkeyRegistry } from "src/interfaces/IPubkeyRegistry.sol";
 
 import { G2Operations } from "./ffi/G2Operation.sol";
@@ -191,8 +190,6 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
     }
 
-    // Silence for CI
-    // Todo: fix ci
     function testSlashOperator() public {
         // Setup operators and give them funds
         (
@@ -213,9 +210,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         bytes32 registrationRoot = _validatorRegistration(primaryOp, underwriterOp);
 
         // Create a mock commitment for slashing
-        ISlasher.SignedCommitment memory commitment = _createMockCommitment(
-            registrationRoot, primaryOp, underwriterOp, primaryPrivate, underwriterPrivate
-        );
+        ISlasher.SignedCommitment memory commitment =
+            _createMockCommitment(primaryOp, primaryPrivate);
 
         // Create evidence bytes
         bytes memory evidence = abi.encode("mock evidence data");
@@ -233,17 +229,14 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         // Set up the challenger for instant slashing to simplify testing
         MockLinglongChallenger(challenger).setIsInstantSlashing(true);
 
-        // Mock necessary functions for slashing to work
         vm.startPrank(owner);
         slasher.setEigenLayerMiddleware(eigenLayerMiddleware);
         slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
         vm.stopPrank();
 
         // Perform the slashing via the Registry
-        vm.startPrank(challenger);
         uint256 slashAmount =
             registry.slashCommitment(registrationRoot, commitment, evidence);
-        vm.stopPrank();
 
         // Verify the slashing was successful
         assertTrue(registry.isSlashed(registrationRoot), "Operator should be slashed");
@@ -372,7 +365,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
             abi.encodeWithSelector(
                 LinglongSlasher.initialize.selector,
                 owner,
-                address(eigenLayerDeployer.allocationManager())
+                address(eigenLayerDeployer.allocationManager()),
+                address(registry)
             )
         );
 
@@ -1129,11 +1123,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     }
 
     function _createMockCommitment(
-        bytes32, /*registrationRoot*/
         address primaryOp,
-        address, /*underwriterOp*/
-        uint256 primaryOpKey,
-        uint256 /*underwriterOpKey*/
+        uint256 primaryOpKey
     )
         internal
         view

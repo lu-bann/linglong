@@ -73,7 +73,8 @@ contract LinglongSlasherTest is Test {
             abi.encodeWithSelector(
                 LinglongSlasher.initialize.selector,
                 owner,
-                address(eigenLayerDeployer.allocationManager())
+                address(eigenLayerDeployer.allocationManager()),
+                address(registry)
             )
         );
 
