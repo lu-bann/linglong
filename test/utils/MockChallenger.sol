@@ -4,9 +4,7 @@ pragma solidity ^0.8.25;
 import { ILinglongChallenger } from "../../src/interfaces/ILinglongChallenger.sol";
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
-import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
-import { BLS } from "@urc/lib/BLS.sol";
 
 /// @dev Mock implementation of ILinglongChallenger for testing
 contract MockLinglongChallenger is ILinglongChallenger {
@@ -45,7 +43,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
         return "MockLinglongChallenger";
     }
 
-    function getSupportedViolationTypes() external pure returns (bytes32) {
+    function getSupportedViolationType() external pure returns (bytes32) {
         return keccak256("URC_VIOLATION");
     }
 
@@ -81,7 +79,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
         return (_slashingInProgress, _slashId);
     }
 
-    function supportsViolationType(bytes32) external pure returns (bool) {
+    function supportedViolationType(bytes32) external pure returns (bool) {
         return true;
     }
 

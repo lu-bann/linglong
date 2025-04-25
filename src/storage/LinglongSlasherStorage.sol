@@ -28,6 +28,9 @@ abstract contract LinglongSlasherStorage is ILinglongSlasher {
     /// @notice Address of the allocation manager
     address public ALLOCATION_MANAGER;
 
+    /// @notice Address of the URC Registry
+    address public REGISTRY_ADDRESS;
+
     /// @notice Mapping to track commitments that have been slashed
     mapping(bytes32 => bool) public slashedCommitments;
 

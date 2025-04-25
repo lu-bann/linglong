@@ -467,7 +467,8 @@ contract SymbioticMiddlewareTest is POCBaseTest {
             abi.encodeWithSelector(
                 LinglongSlasher.initialize.selector,
                 owner,
-                address(eigenLayerDeployer.allocationManager())
+                address(eigenLayerDeployer.allocationManager()),
+                address(urcRegistry)
             )
         );
 
