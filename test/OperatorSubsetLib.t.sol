@@ -177,16 +177,16 @@ contract OperatorSubsetLibTest is Test {
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_2, PROTOCOL_2);
 
         assertTrue(
-            operatorSets.createOperatorSet96(encodedId96_1), "Create set 96_1 failed"
+            operatorSets.createOperatorSet96(encodedId96_1, 0), "Create set 96_1 failed"
         );
         assertTrue(
-            operatorSets.createOperatorSet96(encodedId96_2), "Create set 96_2 failed"
+            operatorSets.createOperatorSet96(encodedId96_2, 0), "Create set 96_2 failed"
         );
         assertTrue(
-            operatorSets.createOperatorSet32(encodedId32_1), "Create set 32_1 failed"
+            operatorSets.createOperatorSet32(encodedId32_1, 0), "Create set 32_1 failed"
         );
         assertTrue(
-            operatorSets.createOperatorSet32(encodedId32_2), "Create set 32_2 failed"
+            operatorSets.createOperatorSet32(encodedId32_2, 0), "Create set 32_2 failed"
         );
     }
 
@@ -209,10 +209,10 @@ contract OperatorSubsetLibTest is Test {
         uint32 encodedId32_2 =
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_2, PROTOCOL_1);
 
-        operatorSets.createOperatorSet96(encodedId96_1);
-        operatorSets.createOperatorSet96(encodedId96_2);
-        operatorSets.createOperatorSet32(encodedId32_1);
-        operatorSets.createOperatorSet32(encodedId32_2);
+        operatorSets.createOperatorSet96(encodedId96_1, 0);
+        operatorSets.createOperatorSet96(encodedId96_2, 0);
+        operatorSets.createOperatorSet32(encodedId32_1, 0);
+        operatorSets.createOperatorSet32(encodedId32_2, 0);
 
         uint96[] memory sets96 = operatorSets.getOperatorSets96();
         assertEq(sets96.length, 2, "Incorrect number of 96-bit sets returned");
@@ -242,7 +242,7 @@ contract OperatorSubsetLibTest is Test {
     function testAddOperatorToSet() public {
         // Test 96-bit set
         operatorSets.createOperatorSet96(
-            OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1)
+            OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1), 0
         );
         assertTrue(
             operatorSets.addOperatorToSet96(
@@ -268,7 +268,7 @@ contract OperatorSubsetLibTest is Test {
 
         // Test 32-bit set
         operatorSets.createOperatorSet32(
-            OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1)
+            OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1), 0
         );
         assertTrue(
             operatorSets.addOperatorToSet32(
@@ -338,7 +338,7 @@ contract OperatorSubsetLibTest is Test {
     function testRemoveOperatorFromSet() public {
         // Setup for 96-bit set
         operatorSets.createOperatorSet96(
-            OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1)
+            OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1), 0
         );
         operatorSets.addOperatorToSet96(
             OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_1, PROTOCOL_1),
@@ -351,7 +351,7 @@ contract OperatorSubsetLibTest is Test {
 
         // Setup for 32-bit set
         operatorSets.createOperatorSet32(
-            OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1)
+            OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1), 0
         );
         operatorSets.addOperatorToSet32(
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_1, PROTOCOL_1),
@@ -468,8 +468,8 @@ contract OperatorSubsetLibTest is Test {
             OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_2, PROTOCOL_1);
 
         // Create the sets first using encoded IDs
-        operatorSets.createOperatorSet96(encodedIds96[0]);
-        operatorSets.createOperatorSet96(encodedIds96[1]);
+        operatorSets.createOperatorSet96(encodedIds96[0], 0);
+        operatorSets.createOperatorSet96(encodedIds96[1], 0);
 
         // Setup for 32-bit sets
         uint32[] memory encodedIds32 = new uint32[](2);
@@ -479,8 +479,8 @@ contract OperatorSubsetLibTest is Test {
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_2, PROTOCOL_1);
 
         // Create the sets first using encoded IDs
-        operatorSets.createOperatorSet32(encodedIds32[0]);
-        operatorSets.createOperatorSet32(encodedIds32[1]);
+        operatorSets.createOperatorSet32(encodedIds32[0], 0);
+        operatorSets.createOperatorSet32(encodedIds32[1], 0);
 
         // Add operator to multiple sets using encoded IDs
         operatorSets.addOperatorToSets96(encodedIds96, PROTOCOL_1, OPERATOR_1);
@@ -518,8 +518,8 @@ contract OperatorSubsetLibTest is Test {
             OperatorSubsetLib.encodeOperatorSetId96(TEST_BASE_ID_2, PROTOCOL_1);
 
         // Create and populate 96-bit sets using encoded IDs
-        operatorSets.createOperatorSet96(encodedIds96[0]);
-        operatorSets.createOperatorSet96(encodedIds96[1]);
+        operatorSets.createOperatorSet96(encodedIds96[0], 0);
+        operatorSets.createOperatorSet96(encodedIds96[1], 0);
         operatorSets.addOperatorToSet96(encodedIds96[0], OPERATOR_1);
         operatorSets.addOperatorToSet96(encodedIds96[1], OPERATOR_1);
 
@@ -535,8 +535,8 @@ contract OperatorSubsetLibTest is Test {
             OperatorSubsetLib.encodeOperatorSetId32(TEST_BASE_ID_32_2, PROTOCOL_1);
 
         // Create and populate 32-bit sets using encoded IDs
-        operatorSets.createOperatorSet32(encodedIds32[0]);
-        operatorSets.createOperatorSet32(encodedIds32[1]);
+        operatorSets.createOperatorSet32(encodedIds32[0], 0);
+        operatorSets.createOperatorSet32(encodedIds32[1], 0);
         operatorSets.addOperatorToSet32(encodedIds32[0], OPERATOR_1);
         operatorSets.addOperatorToSet32(encodedIds32[1], OPERATOR_1);
 

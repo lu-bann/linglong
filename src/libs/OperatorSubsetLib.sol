@@ -40,8 +40,12 @@ library OperatorSubsetLib {
         EnumerableSet.UintSet operatorSetIds32; // For 32-bit IDs
         // set id to operator address mapping for 96-bit IDs
         mapping(uint96 => EnumerableSet.AddressSet) sets96;
+        // set id => minStake mapping for 96-bit IDs
+        mapping(uint96 => uint256) minStake96;
         // set id to operator address mapping for 32-bit IDs
         mapping(uint32 => EnumerableSet.AddressSet) sets32;
+        // set id => minStake mapping for 32-bit IDs
+        mapping(uint32 => uint256) minStake32;
     }
 
     /// @notice Encodes a protocol type and base ID into a single ID using uint96 (5 bits protocol, 91 bits baseId)
@@ -226,11 +230,13 @@ library OperatorSubsetLib {
     /// @return Success boolean
     function createOperatorSet96(
         OperatorSets storage operatorSets,
-        uint96 encodedId
+        uint96 encodedId,
+        uint256 minStake
     )
         internal
         returns (bool)
     {
+        operatorSets.minStake96[encodedId] = minStake;
         return operatorSets.operatorSetIds96.add(uint256(encodedId));
     }
 
@@ -238,14 +244,17 @@ library OperatorSubsetLib {
     /// @dev Uses uint32 for smaller operator set IDs
     /// @param operatorSets The storage reference to operator sets mapping
     /// @param encodedId The encoded operator set ID as uint32
+    /// @param minStake The minimum stake required for the operator set
     /// @return Success boolean
     function createOperatorSet32(
         OperatorSets storage operatorSets,
-        uint32 encodedId
+        uint32 encodedId,
+        uint256 minStake
     )
         internal
         returns (bool)
     {
+        operatorSets.minStake32[encodedId] = minStake;
         return operatorSets.operatorSetIds32.add(uint256(encodedId));
     }
 
@@ -622,5 +631,31 @@ library OperatorSubsetLib {
         } else {
             revert OperatorSetLib__OperatorSetDoesNotExist();
         }
+    }
+
+    /* ========== MIN STAKE HELPERS ========== */
+
+    /// @notice Returns the minimum stake required for a uint32 operator set
+    function getMinStake32(
+        OperatorSets storage operatorSets,
+        uint32 encodedId
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        return operatorSets.minStake32[encodedId];
+    }
+
+    /// @notice Returns the minimum stake required for a uint96 operator set
+    function getMinStake96(
+        OperatorSets storage operatorSets,
+        uint96 encodedId
+    )
+        internal
+        view
+        returns (uint256)
+    {
+        return operatorSets.minStake96[encodedId];
     }
 }

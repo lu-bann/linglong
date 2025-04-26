@@ -162,11 +162,13 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Create a new operator set with the specified strategies
     /// @param subnetworkId The ID of the subnetwork
-    function createSubnetwork(uint96 subnetworkId) external;
+    /// @param minStake The minimum stake required for the subnetwork
+    function createSubnetwork(uint96 subnetworkId, uint256 minStake) external;
 
     /// @notice Create a new operator set with the specified strategies
     /// @param operatorSetId The ID of the operator set
-    function createOperatorSet(uint32 operatorSetId) external;
+    /// @param minStake The minimum stake required for the operator set
+    function createOperatorSet(uint32 operatorSetId, uint256 minStake) external;
 
     /// @notice Gets the protocol type for a middleware address
     /// @param middleware The middleware address to query

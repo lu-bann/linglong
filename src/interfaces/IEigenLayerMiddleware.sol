@@ -112,8 +112,14 @@ interface IEigenLayerMiddleware {
 
     /// @notice Create a new operator set with specified strategies
     /// @param strategies Array of strategy contracts
+    /// @param minStake The minimum stake required for the operator set
     /// @return The ID of the newly created operator set
-    function createOperatorSet(IStrategy[] memory strategies) external returns (uint32);
+    function createOperatorSet(
+        IStrategy[] memory strategies,
+        uint256 minStake
+    )
+        external
+        returns (uint32);
 
     /// @notice Add strategies to an existing operator set
     /// @param operatorSetId The ID of the operator set

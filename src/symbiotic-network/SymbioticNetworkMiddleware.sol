@@ -119,13 +119,20 @@ contract SymbioticNetworkMiddleware is
     // ==============================================================================================
 
     /// @notice Creates a new subnetwork with the given ID
+    /// @param minStake The minimum stake required for the subnetwork
     /// @param baseSubnetworkId The ID of the base subnetwork to create
-    function createNewSubnetwork(uint96 baseSubnetworkId) external checkAccess {
+    function createNewSubnetwork(
+        uint96 baseSubnetworkId,
+        uint256 minStake
+    )
+        external
+        checkAccess
+    {
         uint96 encodedSubnetworkId = baseSubnetworkId.encodeOperatorSetId96(
             ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
         );
         super._registerSubnetwork(encodedSubnetworkId);
-        REGISTRY_COORDINATOR.createSubnetwork(encodedSubnetworkId);
+        REGISTRY_COORDINATOR.createSubnetwork(encodedSubnetworkId, minStake);
         SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
     }
 

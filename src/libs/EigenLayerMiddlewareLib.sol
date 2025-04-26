@@ -260,7 +260,8 @@ library EigenLayerMiddlewareLib {
         address allocationManager,
         address avsAddress,
         ITaiyiRegistryCoordinator registryCoordinator,
-        IStrategy[] memory strategies
+        IStrategy[] memory strategies,
+        uint256 minStake
     )
         internal
         returns (uint32 operatorSetId)
@@ -288,7 +289,7 @@ library EigenLayerMiddlewareLib {
             avsAddress, createSetParams
         );
 
-        registryCoordinator.createOperatorSet(operatorSetId);
+        registryCoordinator.createOperatorSet(operatorSetId, minStake);
 
         return operatorSetId;
     }

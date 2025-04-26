@@ -112,9 +112,10 @@ contract SetupContract is Script, Test {
         IStrategy[] memory strategies = new IStrategy[](1);
         strategies[0] = IStrategy(wethStrategyAddr);
 
-        uint32 validatorOperatorSetId = eigenLayerMiddleware.createOperatorSet(strategies);
+        uint32 validatorOperatorSetId =
+            eigenLayerMiddleware.createOperatorSet(strategies, 0);
         uint32 underwriterOperatorSetId =
-            eigenLayerMiddleware.createOperatorSet(strategies);
+            eigenLayerMiddleware.createOperatorSet(strategies, 0);
 
         OperatorSet memory opSet;
         opSet.id = validatorOperatorSetId;

@@ -1,47 +1,46 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
+import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
+
+import { ISymbioticNetworkMiddleware } from
+    "../interfaces/ISymbioticNetworkMiddleware.sol";
+import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
+import { BN254 } from "../libs/BN254.sol";
+
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
+import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
+import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
+import { TaiyiRegistryCoordinatorStorage } from
+    "../storage/TaiyiRegistryCoordinatorStorage.sol";
 import { AllocationManager } from
     "@eigenlayer-contracts/src/contracts/core/AllocationManager.sol";
-
 import { IAVSRegistrar } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
 import {
     IAllocationManager,
     IAllocationManagerTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+
+import { IDelegationManager } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
+import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import { IPauserRegistry } from
-    "eigenlayer-contracts/src/contracts/interfaces/IPauserRegistry.sol";
 
-import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
-
-import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
-import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
-
-import { BN254 } from "../libs/BN254.sol";
-import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
-
+import { Pausable } from "@eigenlayer-contracts/src/contracts/permissions/Pausable.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import { Initializable } from
     "@openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import { EIP712Upgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/utils/cryptography/EIP712Upgradeable.sol";
-
-import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
-import { TaiyiRegistryCoordinatorStorage } from
-    "../storage/TaiyiRegistryCoordinatorStorage.sol";
-import { Pausable } from "@eigenlayer-contracts/src/contracts/permissions/Pausable.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
-
-import { ISymbioticNetworkMiddleware } from
-    "../interfaces/ISymbioticNetworkMiddleware.sol";
-import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
-
-import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
+import { IPauserRegistry } from
+    "eigenlayer-contracts/src/contracts/interfaces/IPauserRegistry.sol";
+import "forge-std/console.sol";
 
 /// @title A `TaiyiRegistryCoordinator` that has two registries:
 ///      1) a `PubkeyRegistry` that keeps track of operators' public keys
@@ -171,14 +170,26 @@ contract TaiyiRegistryCoordinator is
 
     /// @dev This function is only callable by the Symbiotic middleware
     /// @inheritdoc ITaiyiRegistryCoordinator
-    function createSubnetwork(uint96 operatorSetId) external onlySymbioticMiddleware {
-        _operatorSets.createOperatorSet96(operatorSetId);
+    function createSubnetwork(
+        uint96 operatorSetId,
+        uint256 minStake
+    )
+        external
+        onlySymbioticMiddleware
+    {
+        _operatorSets.createOperatorSet96(operatorSetId, minStake);
     }
 
     /// @dev This function is only callable by the Eigenlayer middleware
     /// @inheritdoc ITaiyiRegistryCoordinator
-    function createOperatorSet(uint32 operatorSetId) external onlyEigenLayerMiddleware {
-        _operatorSets.createOperatorSet32(operatorSetId);
+    function createOperatorSet(
+        uint32 operatorSetId,
+        uint256 minStake
+    )
+        external
+        onlyEigenLayerMiddleware
+    {
+        _operatorSets.createOperatorSet32(operatorSetId, minStake);
     }
 
     // ==============================================================================================
@@ -703,7 +714,6 @@ contract TaiyiRegistryCoordinator is
     // ================================= PROTOCOL-SPECIFIC FUNCTIONS ===============================
     // ==============================================================================================
 
-    // Todo: check operator stake
     function _registerOperatorForEigenlayer(
         address operator,
         uint32[] memory operatorSetIds,
@@ -729,6 +739,13 @@ contract TaiyiRegistryCoordinator is
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         _operatorInfo[operator].operatorId = operatorId;
+
+        uint256[] memory stakes = _checkInitialEigenStake(operator, operatorSetIds);
+        uint256 aggregateStake;
+        for (uint256 i = 0; i < stakes.length; ++i) {
+            uint256 minStake = _operatorSets.getMinStake32(operatorSetIds[i]);
+            require(stakes[i] >= minStake, "Stake below set minimum");
+        }
 
         // Use the library function to add operator to sets
         _operatorSets.addOperatorToSets32(
@@ -801,5 +818,56 @@ contract TaiyiRegistryCoordinator is
         _operatorSets.removeOperatorFromSets96(
             subnetworkIds, RestakingProtocol.SYMBIOTIC, operator
         );
+    }
+
+    /// @notice Checks the initial EigenLayer stake for an operator
+    /// @param operator The operator to check
+    /// @param operatorSetIds The operator sets to check
+    /// @return stakesPerSet Array of stake amounts per operatorSetId
+    function _checkInitialEigenStake(
+        address operator,
+        uint32[] memory operatorSetIds
+    )
+        internal
+        view
+        returns (uint256[] memory stakesPerSet)
+    {
+        stakesPerSet = new uint256[](operatorSetIds.length);
+
+        // Access DelegationManager through AllocationManager's immutable variable
+        IDelegationManager deleg =
+            AllocationManager(address(allocationManager)).delegation();
+
+        // Loop over each operator set we're registering for
+        for (uint256 k = 0; k < operatorSetIds.length; ++k) {
+            uint32 encodedSetId = operatorSetIds[k];
+            OperatorSet memory opSet =
+                OperatorSet({ avs: eigenLayerMiddleware, id: encodedSetId });
+
+            IStrategy[] memory strategies =
+                allocationManager.getAllocatedStrategies(operator, opSet);
+            if (strategies.length == 0) {
+                stakesPerSet[k] = 0;
+                continue;
+            }
+
+            uint256[] memory shares = deleg.getOperatorShares(operator, strategies);
+
+            uint256 stakeForSet;
+            for (uint256 i = 0; i < strategies.length; ++i) {
+                IAllocationManagerTypes.Allocation memory alloc =
+                    allocationManager.getAllocation(operator, opSet, strategies[i]);
+                if (alloc.currentMagnitude == 0) continue;
+
+                uint64 maxMag = allocationManager.getMaxMagnitude(operator, strategies[i]);
+                if (maxMag == 0) continue; // avoid div-by-zero, also implies no stake
+
+                uint256 stakePortion =
+                    (shares[i] * uint256(alloc.currentMagnitude)) / uint256(maxMag);
+                stakeForSet += stakePortion;
+            }
+
+            stakesPerSet[k] = stakeForSet;
+        }
     }
 }
