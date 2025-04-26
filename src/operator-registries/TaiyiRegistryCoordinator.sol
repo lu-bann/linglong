@@ -611,9 +611,7 @@ contract TaiyiRegistryCoordinator is
         view
         returns (bytes32)
     {
-        return _hashTypedDataV4(
-            keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator))
-        );
+        return keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator));
     }
 
     /**
@@ -689,9 +687,7 @@ contract TaiyiRegistryCoordinator is
         internal
         returns (bytes32 operatorId)
     {
-        return pubkeyRegistry.getOrRegisterOperatorId(
-            operator, params, pubkeyRegistrationMessageHash(operator)
-        );
+        return pubkeyRegistry.getOrRegisterOperatorId(operator, params);
     }
 
     /// @notice Updates an operator's socket address in the SocketRegistry

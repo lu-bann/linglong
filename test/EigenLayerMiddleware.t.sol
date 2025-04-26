@@ -78,6 +78,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     address rewardsInitiator;
     uint256 operatorSecretKey;
     bytes operatorBLSPubKey;
+    bytes validatorOperatorBLSPubKey;
+    bytes underwriterOperatorBLSPubKey;
     Registry public registry;
     LinglongSlasher public slasher;
     address public challenger;
@@ -117,6 +119,12 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
                 optInDelay: 7200
             })
         );
+        operatorBLSPubKey =
+            hex"95a254501b7733239ed3cec4d56737977bd09ede881d8a234560e83e5525017add3b1dcc3eabfb85e12a4131b19c253b";
+        validatorOperatorBLSPubKey =
+            hex"95a254501b7733239ed3cec4d56737977bd09ede881d8a234560e83e5525017add3b1dcc3eabfb85e12a4131b19c253c";
+        underwriterOperatorBLSPubKey =
+            hex"95a254501b7733239ed3cec4d56737977bd09ede881d8a234560e83e5525017add3b1dcc3eabfb85e12a4131b19c2534";
         _setupEigenLayerAndAccounts();
         _deployTaiyiRegistryCoordinator();
         _deployLinglongSlasher();
@@ -145,7 +153,9 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         _verifyOperatorSetExists(underwriterOpSet);
 
         // 2. Register operator
-        _registerOperator(operator, validatorOperatorSetId, operatorSecretKey);
+        _registerOperator(
+            operator, validatorOperatorSetId, operatorSecretKey, operatorBLSPubKey
+        );
 
         // 3. Verify registration
         _verifyOperatorRegistrationInEigenLayer(operator);
@@ -180,8 +190,15 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         ) = _setupOperatorsWithFunds();
 
         // Create BLS keys and register operators
-        _registerOperator(primaryOp, validatorOperatorSetId, primaryPrivate);
-        _registerOperator(underwriterOp, underwriterOperatorSetId, underwriterPrivate);
+        _registerOperator(
+            primaryOp, validatorOperatorSetId, primaryPrivate, validatorOperatorBLSPubKey
+        );
+        _registerOperator(
+            underwriterOp,
+            underwriterOperatorSetId,
+            underwriterPrivate,
+            underwriterOperatorBLSPubKey
+        );
 
         // Setup mocks and complete test
         _verifyOperatorRegistration(primaryOp, underwriterOp);
@@ -200,8 +217,15 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         ) = _setupOperatorsWithFunds();
 
         // Create BLS keys and register operators
-        _registerOperator(primaryOp, validatorOperatorSetId, primaryPrivate);
-        _registerOperator(underwriterOp, underwriterOperatorSetId, underwriterPrivate);
+        _registerOperator(
+            primaryOp, validatorOperatorSetId, primaryPrivate, validatorOperatorBLSPubKey
+        );
+        _registerOperator(
+            underwriterOp,
+            underwriterOperatorSetId,
+            underwriterPrivate,
+            underwriterOperatorBLSPubKey
+        );
 
         // Verify operator registration
         _verifyOperatorRegistration(primaryOp, underwriterOp);
@@ -482,15 +506,16 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
 
     function _signMessage(
         address signer,
+        bytes memory blsPubkey,
         uint256 privateKey
     )
         internal
         view
-        returns (BN254.G1Point memory)
+        returns (bytes memory)
     {
-        BN254.G1Point memory messageHash =
-            registryCoordinator.pubkeyRegistrationMessageHash(signer);
-        return BN254.scalar_mul(messageHash, privateKey);
+        bytes32 messageHash = keccak256(abi.encodePacked(signer, blsPubkey));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, messageHash);
+        return abi.encodePacked(r, s, v);
     }
 
     function _verifyOperatorSetExists(OperatorSet memory opSet) internal view {
@@ -668,7 +693,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     function _registerOperator(
         address _operator,
         uint32 _opSetId,
-        uint256 operatorSecret
+        uint256 operatorSecret,
+        bytes memory blsPubkey
     )
         internal
     {
@@ -682,7 +708,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         _allocateStakeToAVS(_operator, _opSetId);
 
         // 4. Register for the operator set (step 2 of AVS opt-in)
-        _registerForOperatorSets(_operator, _opSetId, operatorSecret);
+        _registerForOperatorSets(_operator, _opSetId, operatorSecret, blsPubkey);
     }
 
     function _registerOperatorInEigenLayer(address _operator) internal {
@@ -772,7 +798,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     function _registerForOperatorSets(
         address _operator,
         uint32 _opSetId,
-        uint256 operatorSecret
+        uint256 operatorSecret,
+        bytes memory blsPubkey
     )
         internal
         impersonate(_operator)
@@ -788,13 +815,14 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         IPubkeyRegistry.PubkeyRegistrationParams memory params;
 
         // Create G1 point for the pubkey using BN254 library
-        params.pubkeyG1 = BN254.generatorG1().scalar_mul(operatorSecret);
+        params.operator = _operator;
 
         // Create G2 point for the pubkey using BN254 library
-        params.pubkeyG2 = mul(operatorSecret);
+        params.blsPubkey = blsPubkey;
 
         // Create a signature point using BN254 library
-        params.pubkeyRegistrationSignature = _signMessage(_operator, operatorSecret);
+        params.pubkeyRegistrationSignature =
+            _signMessage(_operator, blsPubkey, operatorSecret);
 
         bytes memory formattedData = abi.encode(socket, params);
 

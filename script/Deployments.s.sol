@@ -297,7 +297,7 @@ contract Deploy is Script, Test {
             ITransparentUpgradeableProxy(address(linglongSlasher)),
             address(slasherImpl),
             abi.encodeWithSelector(
-                LinglongSlasher.initialize.selector, implOwner, allocationManager
+                LinglongSlasher.initialize.selector, implOwner, allocationManager, urc
             )
         );
 

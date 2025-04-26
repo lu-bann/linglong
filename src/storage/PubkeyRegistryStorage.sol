@@ -30,17 +30,14 @@ abstract contract PubkeyRegistryStorage {
     /// @notice The registry coordinator contract
     ITaiyiRegistryCoordinator internal registryCoordinator;
 
-    /// @notice Mapping from operator address to their G1 public key
-    mapping(address => BN254.G1Point) internal operatorToPubkey;
-
-    /// @notice Mapping from operator address to their G2 public key
-    mapping(address => BN254.G2Point) internal operatorToPubkeyG2;
-
     /// @notice Mapping from operator address to their public key hash
     mapping(address => bytes32) internal operatorToPubkeyHash;
 
     /// @notice Mapping from public key hash to operator address
     mapping(bytes32 => address) internal pubkeyHashToOperator;
+
+    /// @notice Mapping from pubkey hash to pubkey
+    mapping(bytes32 => bytes) internal pubkeyHashToPubkey;
 
     /// @notice Constructor to set the registry coordinator
     /// @param _registryCoordinator Address of the registry coordinator contract

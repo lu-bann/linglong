@@ -54,7 +54,7 @@
     "allocationManager": {
         "init_paused_status": 0,
         "DEALLOCATION_DELAY": 900,
-        "ALLOCATION_CONFIGURATION_DELAY": 1200
+        "ALLOCATION_CONFIGURATION_DELAY": 1
    },
     "ethPOSDepositAddress": "0x4242424242424242424242424242424242424242"
   }

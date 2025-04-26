@@ -28,64 +28,85 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
         PubkeyRegistryStorage(_registryCoordinator)
     { }
 
+    function splitSignature(bytes memory sig)
+        public
+        pure
+        returns (bytes32 r, bytes32 s, uint8 v)
+    {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            /*
+            First 32 bytes stores the length of the signature
+
+            add(sig, 32) = pointer of sig + 32
+            effectively, skips first 32 bytes of signature
+
+            mload(p) loads next 32 bytes starting at the memory address p into memory
+            */
+
+            // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+            // second 32 bytes
+            s := mload(add(sig, 64))
+            // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // implicitly return (r, s, v)
+    }
+
+    function recoverSigner(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature
+    )
+        public
+        pure
+        returns (address)
+    {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
     // Todo: remove bypass in test mode
     /// @inheritdoc IPubkeyRegistry
+
     function registerBLSPublicKey(
         address operator,
-        PubkeyRegistrationParams calldata params,
-        BN254.G1Point calldata pubkeyRegistrationMessageHash
+        PubkeyRegistrationParams calldata params
     )
         public
         onlyRegistryCoordinator
         returns (bytes32 operatorId)
     {
-        bytes32 pubkeyHash = BN254.hashG1Point(params.pubkeyG1);
+        bytes32 pubkeyHash = keccak256(params.blsPubkey);
         require(pubkeyHash != ZERO_PK_HASH, ZeroPubKey());
         require(getOperatorId(operator) == bytes32(0), OperatorAlreadyRegistered());
         require(
             pubkeyHashToOperator[pubkeyHash] == address(0), BLSPubkeyAlreadyRegistered()
         );
 
-        // gamma = h(sigma, P, P', H(m))
-        uint256 gamma = uint256(
-            keccak256(
-                abi.encodePacked(
-                    params.pubkeyRegistrationSignature.X,
-                    params.pubkeyRegistrationSignature.Y,
-                    params.pubkeyG1.X,
-                    params.pubkeyG1.Y,
-                    params.pubkeyG2.X,
-                    params.pubkeyG2.Y,
-                    pubkeyRegistrationMessageHash.X,
-                    pubkeyRegistrationMessageHash.Y
-                )
-            )
-        ) % BN254.FR_MODULUS;
+        bytes32 messageHash =
+            keccak256(abi.encodePacked(params.operator, params.blsPubkey));
 
-        // e(sigma + P * gamma, [-1]_2) = e(H(m) + [1]_1 * gamma, P')
+        /// Verify ecdsa the signature
         require(
-            BN254.pairing(
-                params.pubkeyRegistrationSignature.plus(params.pubkeyG1.scalar_mul(gamma)),
-                BN254.negGeneratorG2(),
-                pubkeyRegistrationMessageHash.plus(BN254.generatorG1().scalar_mul(gamma)),
-                params.pubkeyG2
-            ),
-            InvalidBLSSignatureOrPrivateKey()
+            recoverSigner(messageHash, params.pubkeyRegistrationSignature)
+                == params.operator,
+            InvalidECDSASignature()
         );
 
-        operatorToPubkey[operator] = params.pubkeyG1;
-        operatorToPubkeyG2[operator] = params.pubkeyG2;
+        pubkeyHashToPubkey[pubkeyHash] = params.blsPubkey;
         operatorToPubkeyHash[operator] = pubkeyHash;
         pubkeyHashToOperator[pubkeyHash] = operator;
 
-        emit NewPubkeyRegistration(operator, params.pubkeyG1, params.pubkeyG2);
+        emit NewPubkeyRegistration(operator, params.blsPubkey);
         return pubkeyHash;
     }
 
     function getOrRegisterOperatorId(
         address operator,
-        PubkeyRegistrationParams calldata params,
-        BN254.G1Point calldata pubkeyRegistrationMessageHash
+        PubkeyRegistrationParams calldata params
     )
         external
         onlyRegistryCoordinator
@@ -93,50 +114,9 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     {
         operatorId = getOperatorId(operator);
         if (operatorId == 0) {
-            operatorId =
-                registerBLSPublicKey(operator, params, pubkeyRegistrationMessageHash);
+            operatorId = registerBLSPublicKey(operator, params);
         }
         return operatorId;
-    }
-
-    /// @notice Verifies and registers a G2 public key for an operator that already has a G1 key
-    /// @dev This is meant to be used as a one-time way to add G2 public keys for operators that have G1 keys but no G2 key on chain
-    /// @param operator The address of the operator to register the G2 key for
-    /// @param pubkeyG2 The G2 public key to register
-    function verifyAndRegisterG2PubkeyForOperator(
-        address operator,
-        BN254.G2Point calldata pubkeyG2
-    )
-        external
-        onlyRegistryCoordinatorOwner
-    {
-        // Get the operator's G1 pubkey. Reverts if they have not registered a key
-        (BN254.G1Point memory pubkeyG1,) = getRegisteredPubkey(operator);
-
-        _checkG2PubkeyNotSet(operator);
-
-        require(
-            BN254.pairing(pubkeyG1, BN254.negGeneratorG2(), BN254.generatorG1(), pubkeyG2),
-            InvalidBLSSignatureOrPrivateKey()
-        );
-
-        operatorToPubkeyG2[operator] = pubkeyG2;
-
-        emit NewG2PubkeyRegistration(operator, pubkeyG2);
-    }
-
-    /// @inheritdoc IPubkeyRegistry
-    function getRegisteredPubkey(address operator)
-        public
-        view
-        returns (BN254.G1Point memory, bytes32)
-    {
-        BN254.G1Point memory pubkey = operatorToPubkey[operator];
-        bytes32 pubkeyHash = getOperatorId(operator);
-
-        require(pubkeyHash != bytes32(0), OperatorNotRegistered());
-
-        return (pubkey, pubkeyHash);
     }
 
     /// @inheritdoc IPubkeyRegistry
@@ -150,13 +130,13 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     }
 
     /// @inheritdoc IPubkeyRegistry
-    function getOperatorPubkeyG2(address operator)
+    function getOperatorPubkey(address operator)
         public
         view
         override
-        returns (BN254.G2Point memory)
+        returns (bytes memory)
     {
-        return operatorToPubkeyG2[operator];
+        return pubkeyHashToPubkey[getOperatorId(operator)];
     }
 
     function _checkRegistryCoordinator() internal view {
@@ -167,16 +147,6 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
         require(
             msg.sender == OwnableUpgradeable(address(registryCoordinator)).owner(),
             OnlyRegistryCoordinatorOwner()
-        );
-    }
-
-    /// @notice Checks if a G2 pubkey is already set for an operator
-    function _checkG2PubkeyNotSet(address operator) internal view {
-        BN254.G2Point memory existingG2Pubkey = getOperatorPubkeyG2(operator);
-        require(
-            existingG2Pubkey.X[0] == 0 && existingG2Pubkey.X[1] == 0
-                && existingG2Pubkey.Y[0] == 0 && existingG2Pubkey.Y[1] == 0,
-            G2PubkeyAlreadySet()
         );
     }
 }
