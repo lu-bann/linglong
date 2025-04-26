@@ -8,6 +8,8 @@ import { PubkeyRegistryStorage } from "../storage/PubkeyRegistryStorage.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 
+import {ECDSA } from "@openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+
 contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     using BN254 for BN254.G1Point;
 
@@ -28,6 +30,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
         PubkeyRegistryStorage(_registryCoordinator)
     { }
 
+<<<<<<< Updated upstream
     function splitSignature(bytes memory sig)
         public
         pure
@@ -68,6 +71,10 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }
+=======
+    // Todo: remove bypass in test mode
+    /// @inheritdoc IPubkeyRegistry
+>>>>>>> Stashed changes
 
     /// @inheritdoc IPubkeyRegistry
     function registerBLSPublicKey(
@@ -90,7 +97,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
 
         /// Verify ecdsa the signature
         require(
-            recoverSigner(messageHash, params.pubkeyRegistrationSignature)
+            ECDSA.recover(messageHash, params.pubkeyRegistrationSignature)
                 == params.operator,
             InvalidECDSASignature()
         );
