@@ -237,13 +237,16 @@ contract EigenLayerMiddleware is
     /// @notice Creates an operator set with the given strategies
     /// @param strategies Array of strategies for the operator set
     /// @return operatorSetId The ID of the created operator set
-    function createOperatorSet(IStrategy[] memory strategies)
+    function createOperatorSet(
+        IStrategy[] memory strategies,
+        uint256 minStake
+    )
         external
         onlyOwner
         returns (uint32 operatorSetId)
     {
         return EigenLayerMiddlewareLib.createOperatorSet(
-            ALLOCATION_MANAGER, address(this), REGISTRY_COORDINATOR, strategies
+            ALLOCATION_MANAGER, address(this), REGISTRY_COORDINATOR, strategies, minStake
         );
     }
 

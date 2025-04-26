@@ -535,8 +535,8 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     }
 
     function _setupSubnetworks() internal impersonate(owner) {
-        middleware.createNewSubnetwork(VALIDATOR_SUBNETWORK);
-        middleware.createNewSubnetwork(UNDERWRITER_SUBNETWORK);
+        middleware.createNewSubnetwork(VALIDATOR_SUBNETWORK, 0);
+        middleware.createNewSubnetwork(UNDERWRITER_SUBNETWORK, 0);
 
         validatorSubnetworkId = VALIDATOR_SUBNETWORK;
         underwriterSubnetworkId = UNDERWRITER_SUBNETWORK;
