@@ -68,9 +68,8 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }
-    // Todo: remove bypass in test mode
-    /// @inheritdoc IPubkeyRegistry
 
+    /// @inheritdoc IPubkeyRegistry
     function registerBLSPublicKey(
         address operator,
         PubkeyRegistrationParams calldata params
