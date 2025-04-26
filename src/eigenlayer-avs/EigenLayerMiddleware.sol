@@ -39,9 +39,12 @@ import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
+
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import { PermissionController } from
+    "@eigenlayer-contracts/src/contracts/permissions/PermissionController.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
@@ -164,9 +167,21 @@ contract EigenLayerMiddleware is
     // ================================= EXTERNAL WRITE FUNCTIONS ==================================
     // ==============================================================================================
 
+    function addAdminToPermissionController(
+        address admin,
+        address permissionController
+    )
+        external
+        onlyOwner
+    {
+        PermissionController controller = PermissionController(permissionController);
+
+        controller.addPendingAdmin(address(this), admin);
+    }
     /// @notice Registers multiple validators in a single transaction
     /// @param registrations Array of validator registration parameters
     /// @dev Registers validators with the Registry contract and sends required collateral
+
     function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable

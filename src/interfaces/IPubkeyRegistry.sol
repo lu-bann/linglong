@@ -6,16 +6,6 @@ import { BN254 } from "../libs/BN254.sol";
 /// @title Interface for the PubkeyRegistry contract
 /// @notice Manages BLS public key registration and verification for operators
 interface IPubkeyRegistry {
-    /// @notice Registers a BLS public key for an operator
-    /// @param operator The operator's address
-    /// @param params The public key registration parameters
-    function registerBLSPublicKey(
-        address operator,
-        PubkeyRegistrationParams calldata params
-    )
-        external
-        returns (bytes32 operatorId);
-
     /// @notice Gets or registers an operator's ID
     /// @param operator The operator's address
     /// @param params The public key registration parameters
