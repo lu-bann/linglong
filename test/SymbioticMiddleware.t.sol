@@ -476,7 +476,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     }
 
     function _setupRegistryCoordinatorRegistries() internal impersonate(owner) {
-        pubkeyRegistry = new PubkeyRegistry(registry);
+        pubkeyRegistry = new PubkeyRegistry(address(registry));
         socketRegistry = new SocketRegistry(registry);
 
         registry.updateSocketRegistry(address(socketRegistry));

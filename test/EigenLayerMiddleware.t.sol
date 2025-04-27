@@ -403,7 +403,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         vm.startPrank(owner);
 
         // Deploy registries
-        PubkeyRegistry pubkeyRegistry = new PubkeyRegistry(registryCoordinator);
+        PubkeyRegistry pubkeyRegistry = new PubkeyRegistry(address(registryCoordinator));
         SocketRegistry socketRegistry = new SocketRegistry(registryCoordinator);
 
         // Update registry coordinator with new registries
