@@ -323,6 +323,22 @@ interface ITaiyiRegistryCoordinator {
         view
         returns (bytes32);
 
+    /// @notice whether the operator set Id is set
+    /// @param operatorSetId operator Id
+    /// @return yes or no
+    function isEigenlayerOperatorSetExist(uint32 operatorSetId)
+        external
+        view
+        returns (bool);
+
+    /// @notice whether the operator set Id is set
+    /// @param operatorSetId operator Id
+    /// @return yes or no
+    function isSymbioticOperatorSetExist(uint96 operatorSetId)
+        external
+        view
+        returns (bool);
+
     /// @notice Checks if an operator is in a specific operator set
     /// @param operatorSetId The operator set ID
     /// @param operator The operator address
