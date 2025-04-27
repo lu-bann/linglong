@@ -187,7 +187,11 @@ contract EigenLayerMiddleware is
         payable
         returns (bytes32)
     {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
@@ -216,7 +220,11 @@ contract EigenLayerMiddleware is
     /// @param registrationRoot The registration root to unregister
     /// @dev Removes all delegations and unregisters from the Registry contract
     function unregisterValidators(bytes32 registrationRoot) external {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
@@ -251,9 +259,11 @@ contract EigenLayerMiddleware is
 
     /// @notice Creates an operator set with the given strategies
     /// @param strategies Array of strategies for the operator set
+    /// @param operatorSetType The type of operator set to create, 0 for validator, 1 for underwriter
     /// @return operatorSetId The ID of the created operator set
     function createOperatorSet(
         IStrategy[] memory strategies,
+        uint32 operatorSetType,
         uint256 minStake
     )
         external
@@ -261,7 +271,12 @@ contract EigenLayerMiddleware is
         returns (uint32 operatorSetId)
     {
         return EigenLayerMiddlewareLib.createOperatorSet(
-            ALLOCATION_MANAGER, address(this), REGISTRY_COORDINATOR, strategies, minStake
+            ALLOCATION_MANAGER,
+            address(this),
+            REGISTRY_COORDINATOR,
+            strategies,
+            minStake,
+            operatorSetType
         );
     }
 
@@ -283,14 +298,20 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
 
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(1, delegateeAddress)
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, delegateeAddress
+            )
         ) {
             revert
                 EigenLayerMiddlewareLib

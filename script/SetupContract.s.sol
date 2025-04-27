@@ -53,6 +53,8 @@ import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
+import { OperatorSubsetLib } from "src/libs/OperatorSubsetLib.sol";
+
 contract SetupContract is Script, Test {
     using stdStorage for StdStorage;
 
@@ -111,10 +113,12 @@ contract SetupContract is Script, Test {
         IStrategy[] memory strategies = new IStrategy[](1);
         strategies[0] = IStrategy(wethStrategyAddr);
 
-        uint32 validatorOperatorSetId =
-            eigenLayerMiddleware.createOperatorSet(strategies, 0);
-        uint32 underwriterOperatorSetId =
-            eigenLayerMiddleware.createOperatorSet(strategies, 0);
+        uint32 validatorOperatorSetId = eigenLayerMiddleware.createOperatorSet(
+            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+        );
+        uint32 underwriterOperatorSetId = eigenLayerMiddleware.createOperatorSet(
+            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
+        );
 
         OperatorSet memory opSet;
         opSet.id = validatorOperatorSetId;

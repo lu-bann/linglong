@@ -454,8 +454,12 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
 
         // Create the operator set directly through middleware
         vm.startPrank(owner);
-        validatorOperatorSetId = middleware.createOperatorSet(strategies, 0);
-        underwriterOperatorSetId = middleware.createOperatorSet(strategies, 0);
+        validatorOperatorSetId = middleware.createOperatorSet(
+            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+        );
+        underwriterOperatorSetId = middleware.createOperatorSet(
+            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
+        );
         vm.stopPrank();
 
         console.log("Created validator operator set with ID:", validatorOperatorSetId);
