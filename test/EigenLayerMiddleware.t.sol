@@ -510,7 +510,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         uint256 privateKey
     )
         internal
-        view
+        pure
         returns (bytes memory)
     {
         bytes32 messageHash = keccak256(abi.encodePacked(signer, blsPubkey));
@@ -1038,7 +1038,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         address ownerAddress
     )
         internal
-        view
+        pure
         returns (BLS.G2Point memory)
     {
         // Create a mock signature instead of using BLS.sign which requires precompiles

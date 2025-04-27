@@ -97,7 +97,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
         return pubkeyHashToPubkey[getOperatorId(operator)];
     }
 
-    function _checkRegistryCoordinator() internal {
+    function _checkRegistryCoordinator() internal view {
         require(msg.sender == registryCoordinator, OnlyRegistryCoordinator());
     }
 

@@ -72,16 +72,10 @@ contract SetRegistry is Script, Test {
         uint256 proxyDeployerPrivateKey = vm.parseUint(pkString); // Parse as hex
         uint256 implPrivateKey = vm.parseUint(implPkString); // Parse as hex
         address proxyDeployer = vm.addr(proxyDeployerPrivateKey);
-        address implOwner = vm.addr(implPrivateKey);
 
         string memory outputFile =
             string(bytes("script/output/devnet/taiyiAddresses.json"));
         string memory output_data = vm.readFile(outputFile);
-
-        address socketRegistry =
-            stdJson.readAddress(output_data, ".taiyiAddresses.socketRegistry");
-        address pubkeyRegistry =
-            stdJson.readAddress(output_data, ".taiyiAddresses.pubkeyRegistry");
 
         TaiyiRegistryCoordinator taiyiRegistryCoordinator = TaiyiRegistryCoordinator(
             stdJson.readAddress(output_data, ".taiyiAddresses.taiyiRegistryCoordinator")
@@ -91,15 +85,12 @@ contract SetRegistry is Script, Test {
             stdJson.readAddress(output_data, ".taiyiAddresses.eigenLayerMiddleware")
         );
 
-        LinglongSlasher linglongSlasher = LinglongSlasher(
-            stdJson.readAddress(output_data, ".taiyiAddresses.linglongSlasher")
-        );
         string memory eigenLayerOutputFile =
             string(bytes("script/output/devnet/M2_from_scratch_deployment_data.json"));
 
         string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
-        address wethStrategyAddr =
-            stdJson.readAddress(eigenLayerOutput_data, ".addresses.strategies.WETH");
+        // address wethStrategyAddr =
+        //     stdJson.readAddress(eigenLayerOutput_data, ".addresses.strategies.WETH");
         address allocationManagerAddr =
             stdJson.readAddress(eigenLayerOutput_data, ".addresses.allocationManager");
         address permissionController =

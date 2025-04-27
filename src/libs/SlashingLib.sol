@@ -71,7 +71,6 @@ library SlashingLib {
     {
         IRegistry.OperatorData memory operatorData =
             registry.getOperatorData(registrationRoot);
-        address owner = operatorData.owner;
         uint48 registeredAt = operatorData.registeredAt;
 
         if (registeredAt == 0) {
@@ -281,6 +280,7 @@ library SlashingLib {
         address restakingMiddleware
     )
         internal
+        view
     {
         IRegistry.OperatorData memory operatorData =
             registry.getOperatorData(registrationRoot);

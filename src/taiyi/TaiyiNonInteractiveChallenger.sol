@@ -44,12 +44,12 @@ contract TaiyiNonInteractiveChallenger is ITaiyiNonInteractiveChallenger, Ownabl
     }
 
     /// @inheritdoc ITaiyiNonInteractiveChallenger
-    function getChallenges() external view returns (Challenge[] memory) {
+    function getChallenges() external pure returns (Challenge[] memory) {
         revert("Not implemented");
     }
 
     /// @inheritdoc ITaiyiNonInteractiveChallenger
-    function getChallenge(bytes32 id) external view returns (Challenge memory) {
+    function getChallenge(bytes32 id) external pure returns (Challenge memory) {
         revert("Not implemented");
     }
 

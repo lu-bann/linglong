@@ -65,7 +65,6 @@ contract SetupContract is Script, Test {
             implPkString = string.concat("0x", implPkString);
         }
         uint256 implPrivateKey = vm.parseUint(implPkString); // Parse as hex
-        address implOwner = vm.addr(implPrivateKey);
 
         string memory outputFile =
             string(bytes("script/output/devnet/taiyiAddresses.json"));

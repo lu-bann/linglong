@@ -619,7 +619,7 @@ contract TaiyiRegistryCoordinator is
     /// @param operator is the address of the operator registering their BLS public key
     function calculatePubkeyRegistrationMessageHash(address operator)
         public
-        view
+        pure
         returns (bytes32)
     {
         return keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator));

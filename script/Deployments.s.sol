@@ -70,9 +70,6 @@ contract Deploy is Script, Test {
     address public urc;
     address public implOwner;
 
-    LinglongSlasher public linglongSlasher;
-    EigenLayerMiddleware public eigenLayerMiddleware;
-    TaiyiRegistryCoordinator public taiyiRegistryCoordinator;
 
     function deployEigenLayer(string memory configFileName) internal {
         DeployFromScratch deployFromScratch = new DeployFromScratch();
@@ -151,7 +148,7 @@ contract Deploy is Script, Test {
 
             deployEigenLayer(configFileName);
 
-            IRegistry.Config memory config = IRegistry.Config({
+            IRegistry.Config memory registryConfig = IRegistry.Config({
                 minCollateralWei: 0.1 ether,
                 fraudProofWindow: 7200,
                 unregistrationDelay: 7200,
@@ -159,7 +156,7 @@ contract Deploy is Script, Test {
                 optInDelay: 7200
             });
 
-            Registry registry = new Registry(config);
+            Registry registry = new Registry(registryConfig);
             emit log_address(address(registry));
             urc = address(registry);
         } else if (

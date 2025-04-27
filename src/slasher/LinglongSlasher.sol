@@ -363,6 +363,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         bytes memory payload
     )
         internal
+        view
         returns (ILinglongChallenger.VerificationStatus)
     {
         // Decode the original payload for verification
