@@ -320,6 +320,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         uint256 slashAmount
     )
         internal
+        view
     {
         assertTrue(urcRegistry.isSlashed(registrationRoot), "Validator should be slashed");
         assertTrue(
@@ -373,6 +374,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         uint256 privateKey
     )
         internal
+        pure
         returns (bytes memory)
     {
         bytes32 messageHash = keccak256(key);
@@ -476,7 +478,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     }
 
     function _setupRegistryCoordinatorRegistries() internal impersonate(owner) {
-        pubkeyRegistry = new PubkeyRegistry(registry);
+        pubkeyRegistry = new PubkeyRegistry(address(registry));
         socketRegistry = new SocketRegistry(registry);
 
         registry.updateSocketRegistry(address(socketRegistry));
@@ -615,7 +617,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         address ownerAddress
     )
         internal
-        view
+        pure
         returns (BLS.G2Point memory)
     {
         // Create a mock signature instead of using BLS.sign which requires precompiles

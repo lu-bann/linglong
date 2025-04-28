@@ -8,6 +8,8 @@ import { PubkeyRegistryStorage } from "../storage/PubkeyRegistryStorage.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 
+import { ECDSA } from "@openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+
 contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     using BN254 for BN254.G1Point;
 
@@ -24,58 +26,15 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     }
 
     /// @notice Sets the (immutable) `registryCoordinator` address
-    constructor(ITaiyiRegistryCoordinator _registryCoordinator)
-        PubkeyRegistryStorage(_registryCoordinator)
-    { }
-
-    function splitSignature(bytes memory sig)
-        public
-        pure
-        returns (bytes32 r, bytes32 s, uint8 v)
-    {
-        require(sig.length == 65, "invalid signature length");
-
-        assembly {
-            /*
-            First 32 bytes stores the length of the signature
-
-            add(sig, 32) = pointer of sig + 32
-            effectively, skips first 32 bytes of signature
-
-            mload(p) loads next 32 bytes starting at the memory address p into memory
-            */
-
-            // first 32 bytes, after the length prefix
-            r := mload(add(sig, 32))
-            // second 32 bytes
-            s := mload(add(sig, 64))
-            // final byte (first byte of the next 32 bytes)
-            v := byte(0, mload(add(sig, 96)))
-        }
-
-        // implicitly return (r, s, v)
+    constructor(address _registryCoordinator) {
+        registryCoordinator = _registryCoordinator;
     }
 
-    function recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature
-    )
-        public
-        pure
-        returns (address)
-    {
-        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
-
-        return ecrecover(_ethSignedMessageHash, v, r, s);
-    }
-
-    /// @inheritdoc IPubkeyRegistry
-    function registerBLSPublicKey(
+    function _registerBLSPublicKey(
         address operator,
         PubkeyRegistrationParams calldata params
     )
-        public
-        onlyRegistryCoordinator
+        internal
         returns (bytes32 operatorId)
     {
         bytes32 pubkeyHash = keccak256(params.blsPubkey);
@@ -90,7 +49,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
 
         /// Verify ecdsa the signature
         require(
-            recoverSigner(messageHash, params.pubkeyRegistrationSignature)
+            ECDSA.recover(messageHash, params.pubkeyRegistrationSignature)
                 == params.operator,
             InvalidECDSASignature()
         );
@@ -113,7 +72,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     {
         operatorId = getOperatorId(operator);
         if (operatorId == 0) {
-            operatorId = registerBLSPublicKey(operator, params);
+            operatorId = _registerBLSPublicKey(operator, params);
         }
         return operatorId;
     }
@@ -139,7 +98,7 @@ contract PubkeyRegistry is PubkeyRegistryStorage, IPubkeyRegistry {
     }
 
     function _checkRegistryCoordinator() internal view {
-        require(msg.sender == address(registryCoordinator), OnlyRegistryCoordinator());
+        require(msg.sender == registryCoordinator, OnlyRegistryCoordinator());
     }
 
     function _checkRegistryCoordinatorOwner() internal view {

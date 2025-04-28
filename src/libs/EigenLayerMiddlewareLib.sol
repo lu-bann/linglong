@@ -53,6 +53,7 @@ library EigenLayerMiddlewareLib {
     error InvalidDelegationSignaturesLength();
     error InvalidRegistrationsLength();
     error OperatorIsSlashed();
+    error OperatorSetAlreadyExists();
 
     /// @notice Helper function to deduplicate strategies from operator sets
     /// @param operatorSets Array of operator sets
@@ -261,19 +262,20 @@ library EigenLayerMiddlewareLib {
         address avsAddress,
         ITaiyiRegistryCoordinator registryCoordinator,
         IStrategy[] memory strategies,
-        uint256 minStake
+        uint256 minStake,
+        uint32 operatorSetType
     )
         internal
         returns (uint32 operatorSetId)
     {
         // Get the current operator set count from allocationManager
-        uint256 currentSetCount =
-            IAllocationManager(allocationManager).getOperatorSetCount(avsAddress);
-
-        // Convert to uint32 and encode with the protocol type
-        operatorSetId = uint32(currentSetCount);
-        operatorSetId = operatorSetId.encodeOperatorSetId32(
+        operatorSetId = uint32(operatorSetType).encodeOperatorSetId32(
             ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        );
+
+        require(
+            !registryCoordinator.isEigenlayerOperatorSetExist(operatorSetId),
+            OperatorSetAlreadyExists()
         );
 
         IAllocationManagerTypes.CreateSetParams[] memory createSetParams =

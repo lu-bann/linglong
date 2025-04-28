@@ -156,7 +156,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
         bytes32 registrationRoot
     )
         external
-        view
+        pure
         override
         returns (uint256)
     {

@@ -403,7 +403,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         vm.startPrank(owner);
 
         // Deploy registries
-        PubkeyRegistry pubkeyRegistry = new PubkeyRegistry(registryCoordinator);
+        PubkeyRegistry pubkeyRegistry = new PubkeyRegistry(address(registryCoordinator));
         SocketRegistry socketRegistry = new SocketRegistry(registryCoordinator);
 
         // Update registry coordinator with new registries
@@ -454,8 +454,12 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
 
         // Create the operator set directly through middleware
         vm.startPrank(owner);
-        validatorOperatorSetId = middleware.createOperatorSet(strategies, 0);
-        underwriterOperatorSetId = middleware.createOperatorSet(strategies, 0);
+        validatorOperatorSetId = middleware.createOperatorSet(
+            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+        );
+        underwriterOperatorSetId = middleware.createOperatorSet(
+            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
+        );
         vm.stopPrank();
 
         console.log("Created validator operator set with ID:", validatorOperatorSetId);
@@ -510,7 +514,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         uint256 privateKey
     )
         internal
-        view
+        pure
         returns (bytes memory)
     {
         bytes32 messageHash = keccak256(abi.encodePacked(signer, blsPubkey));
@@ -1038,7 +1042,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         address ownerAddress
     )
         internal
-        view
+        pure
         returns (BLS.G2Point memory)
     {
         // Create a mock signature instead of using BLS.sign which requires precompiles

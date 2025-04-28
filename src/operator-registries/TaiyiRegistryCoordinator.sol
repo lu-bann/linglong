@@ -56,6 +56,7 @@ contract TaiyiRegistryCoordinator is
 {
     using BN254 for BN254.G1Point;
     using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.UintSet;
     using OperatorSubsetLib for OperatorSubsetLib.OperatorSets;
     using RestakingProtocolMapLib for RestakingProtocolMapLib.Map;
     using OperatorSubsetLib for uint96;
@@ -311,10 +312,26 @@ contract TaiyiRegistryCoordinator is
         );
     }
 
+    function isEigenlayerOperatorSetExist(uint32 operatorSetId)
+        external
+        view
+        returns (bool)
+    {
+        return _operatorSets.operatorSetIds32.contains(operatorSetId);
+    }
+
+    function isSymbioticOperatorSetExist(uint96 operatorSetId)
+        external
+        view
+        returns (bool)
+    {
+        return _operatorSets.operatorSetIds96.contains(operatorSetId);
+    }
     /// @notice Checks if an operator is in a specific operator set
     /// @param baseOperatorSetId The base operator set ID
     /// @param operator The operator address
     /// @return True if the operator is in the set, false otherwise
+
     function isEigenLayerOperatorInSet(
         uint32 baseOperatorSetId,
         address operator
@@ -619,7 +636,7 @@ contract TaiyiRegistryCoordinator is
     /// @param operator is the address of the operator registering their BLS public key
     function calculatePubkeyRegistrationMessageHash(address operator)
         public
-        view
+        pure
         returns (bytes32)
     {
         return keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator));

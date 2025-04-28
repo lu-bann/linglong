@@ -116,6 +116,7 @@ interface IEigenLayerMiddleware {
     /// @return The ID of the newly created operator set
     function createOperatorSet(
         IStrategy[] memory strategies,
+        uint32 operatorSetType,
         uint256 minStake
     )
         external

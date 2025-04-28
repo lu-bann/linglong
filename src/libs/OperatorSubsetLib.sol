@@ -34,7 +34,11 @@ library OperatorSubsetLib {
     error OperatorSetLib__IdTooLarge();
     error OperatorSetLib__IdTooLarge32();
 
+    uint32 constant VALIDATOR_SUBSET_TYPE = 0;
+    uint32 constant UNDERWRITER_SUBSET_TYPE = 1;
+
     /// @notice Structure to store operator sets with their members
+
     struct OperatorSets {
         EnumerableSet.UintSet operatorSetIds96; // For 96-bit IDs
         EnumerableSet.UintSet operatorSetIds32; // For 32-bit IDs

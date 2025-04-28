@@ -39,9 +39,12 @@ import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
+
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import { PermissionController } from
+    "@eigenlayer-contracts/src/contracts/permissions/PermissionController.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
@@ -164,15 +167,31 @@ contract EigenLayerMiddleware is
     // ================================= EXTERNAL WRITE FUNCTIONS ==================================
     // ==============================================================================================
 
+    function addAdminToPermissionController(
+        address admin,
+        address permissionController
+    )
+        external
+        onlyOwner
+    {
+        PermissionController controller = PermissionController(permissionController);
+
+        controller.addPendingAdmin(address(this), admin);
+    }
     /// @notice Registers multiple validators in a single transaction
     /// @param registrations Array of validator registration parameters
     /// @dev Registers validators with the Registry contract and sends required collateral
+
     function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable
         returns (bytes32)
     {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
@@ -201,7 +220,11 @@ contract EigenLayerMiddleware is
     /// @param registrationRoot The registration root to unregister
     /// @dev Removes all delegations and unregisters from the Registry contract
     function unregisterValidators(bytes32 registrationRoot) external {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
@@ -236,9 +259,11 @@ contract EigenLayerMiddleware is
 
     /// @notice Creates an operator set with the given strategies
     /// @param strategies Array of strategies for the operator set
+    /// @param operatorSetType The type of operator set to create, 0 for validator, 1 for underwriter
     /// @return operatorSetId The ID of the created operator set
     function createOperatorSet(
         IStrategy[] memory strategies,
+        uint32 operatorSetType,
         uint256 minStake
     )
         external
@@ -246,7 +271,12 @@ contract EigenLayerMiddleware is
         returns (uint32 operatorSetId)
     {
         return EigenLayerMiddlewareLib.createOperatorSet(
-            ALLOCATION_MANAGER, address(this), REGISTRY_COORDINATOR, strategies, minStake
+            ALLOCATION_MANAGER,
+            address(this),
+            REGISTRY_COORDINATOR,
+            strategies,
+            minStake,
+            operatorSetType
         );
     }
 
@@ -268,14 +298,20 @@ contract EigenLayerMiddleware is
     )
         external
     {
-        if (!REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(0, msg.sender)) {
+        if (
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            )
+        ) {
             revert
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
 
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(1, delegateeAddress)
+            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
+                OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, delegateeAddress
+            )
         ) {
             revert
                 EigenLayerMiddlewareLib
@@ -612,7 +648,7 @@ contract EigenLayerMiddleware is
         bytes[] calldata data
     )
         internal
-        view
+        pure
         returns (SlashingLib.DelegationParams memory)
     {
         return SlashingLib.DelegationParams({

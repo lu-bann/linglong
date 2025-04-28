@@ -449,7 +449,7 @@ contract SymbioticNetworkMiddleware is
         bytes[] calldata data
     )
         internal
-        view
+        pure
         returns (SlashingLib.DelegationParams memory)
     {
         return SlashingLib.DelegationParams({

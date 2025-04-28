@@ -28,7 +28,7 @@ abstract contract PubkeyRegistryStorage {
         hex"ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5";
 
     /// @notice The registry coordinator contract
-    ITaiyiRegistryCoordinator internal registryCoordinator;
+    address public registryCoordinator;
 
     /// @notice Mapping from operator address to their public key hash
     mapping(address => bytes32) internal operatorToPubkeyHash;
@@ -38,10 +38,4 @@ abstract contract PubkeyRegistryStorage {
 
     /// @notice Mapping from pubkey hash to pubkey
     mapping(bytes32 => bytes) internal pubkeyHashToPubkey;
-
-    /// @notice Constructor to set the registry coordinator
-    /// @param _registryCoordinator Address of the registry coordinator contract
-    constructor(ITaiyiRegistryCoordinator _registryCoordinator) {
-        registryCoordinator = _registryCoordinator;
-    }
 }

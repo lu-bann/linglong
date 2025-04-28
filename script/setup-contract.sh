@@ -16,4 +16,7 @@ export FOUNDRY_PROFILE=ci
 forge script --rpc-url $EXECUTION_URL \
 -vvvv --broadcast ./script/SetupContract.s.sol:SetupContract \
 --sig "run()" \
--- eigenlayer-deploy-config-devnet.json
+
+forge script --rpc-url $EXECUTION_URL \
+-vvvv --broadcast ./script/SetRegistry.s.sol:SetRegistry \
+--sig "run()" \

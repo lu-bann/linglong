@@ -53,29 +53,29 @@ import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
-import { OperatorSubsetLib } from "src/libs/OperatorSubsetLib.sol";
-
-contract SetupContract is Script, Test {
+contract SetRegistry is Script, Test {
     using stdStorage for StdStorage;
 
     function run() public {
         // Get deployer address from private key
+        string memory pkString = vm.envString("PROXY_OWNER_PRIVATE_KEY");
         string memory implPkString = vm.envString("IMPL_OWNER_PRIVATE_KEY");
-
+        // Check if pkString starts with "0x"; if not, add the prefix.
+        bytes memory pkBytes = bytes(pkString);
+        if (pkBytes.length < 2 || pkBytes[0] != 0x30 || pkBytes[1] != 0x78) {
+            pkString = string.concat("0x", pkString);
+        }
         bytes memory implPkBytes = bytes(implPkString);
         if (implPkBytes.length < 2 || implPkBytes[0] != 0x30 || implPkBytes[1] != 0x78) {
             implPkString = string.concat("0x", implPkString);
         }
+        uint256 proxyDeployerPrivateKey = vm.parseUint(pkString); // Parse as hex
         uint256 implPrivateKey = vm.parseUint(implPkString); // Parse as hex
+        address proxyDeployer = vm.addr(proxyDeployerPrivateKey);
 
         string memory outputFile =
             string(bytes("script/output/devnet/taiyiAddresses.json"));
         string memory output_data = vm.readFile(outputFile);
-
-        address socketRegistry =
-            stdJson.readAddress(output_data, ".taiyiAddresses.socketRegistryImpl");
-        address pubkeyRegistry =
-            stdJson.readAddress(output_data, ".taiyiAddresses.pubkeyRegistryImpl");
 
         TaiyiRegistryCoordinator taiyiRegistryCoordinator = TaiyiRegistryCoordinator(
             stdJson.readAddress(output_data, ".taiyiAddresses.taiyiRegistryCoordinator")
@@ -85,69 +85,34 @@ contract SetupContract is Script, Test {
             stdJson.readAddress(output_data, ".taiyiAddresses.eigenLayerMiddleware")
         );
 
-        LinglongSlasher linglongSlasher = LinglongSlasher(
-            stdJson.readAddress(output_data, ".taiyiAddresses.linglongSlasher")
-        );
         string memory eigenLayerOutputFile =
             string(bytes("script/output/devnet/M2_from_scratch_deployment_data.json"));
 
         string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
-        address wethStrategyAddr =
-            stdJson.readAddress(eigenLayerOutput_data, ".addresses.strategies.WETH");
+        // address wethStrategyAddr =
+        //     stdJson.readAddress(eigenLayerOutput_data, ".addresses.strategies.WETH");
         address allocationManagerAddr =
             stdJson.readAddress(eigenLayerOutput_data, ".addresses.allocationManager");
+        address permissionController =
+            stdJson.readAddress(eigenLayerOutput_data, ".addresses.permissionController");
 
         AllocationManager allocationManager = AllocationManager(allocationManagerAddr);
 
         vm.startBroadcast(implPrivateKey);
+
         // Update registry coordinator with new registries
-        taiyiRegistryCoordinator.updateSocketRegistry(address(socketRegistry));
-        taiyiRegistryCoordinator.updatePubkeyRegistry(address(pubkeyRegistry));
-
-        linglongSlasher.setEigenLayerMiddleware(address(eigenLayerMiddleware));
-        taiyiRegistryCoordinator.setRestakingProtocol(
-            address(eigenLayerMiddleware),
-            ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
+        eigenLayerMiddleware.addAdminToPermissionController(
+            proxyDeployer, permissionController
         );
+        vm.stopBroadcast();
+        vm.startBroadcast(proxyDeployerPrivateKey);
+        PermissionController controller = PermissionController(permissionController);
+        controller.acceptAdmin(address(eigenLayerMiddleware));
 
-        IStrategy[] memory strategies = new IStrategy[](1);
-        strategies[0] = IStrategy(wethStrategyAddr);
-
-        uint32 validatorOperatorSetId = eigenLayerMiddleware.createOperatorSet(
-            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+        AllocationManager manager = AllocationManager(allocationManager);
+        manager.setAVSRegistrar(
+            address(eigenLayerMiddleware), IAVSRegistrar(taiyiRegistryCoordinator)
         );
-        uint32 underwriterOperatorSetId = eigenLayerMiddleware.createOperatorSet(
-            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
-        );
-
-        OperatorSet memory opSet;
-        opSet.id = validatorOperatorSetId;
-        opSet.avs = address(eigenLayerMiddleware);
-
-        bool exists = allocationManager.isOperatorSet(opSet);
-
-        assert(exists);
-
-        opSet.id = underwriterOperatorSetId;
-        opSet.avs = address(eigenLayerMiddleware);
-
-        exists = allocationManager.isOperatorSet(opSet);
-
-        assert(exists);
-        console.log("validator operator set id ", validatorOperatorSetId);
-        console.log("underwriter operator set id ", underwriterOperatorSetId);
-
-        vm.serializeUint(
-            "operatorSetId", "validatorOperatorSetId", validatorOperatorSetId
-        );
-        string memory operatorSetId = vm.serializeUint(
-            "operatorSetId", "underwriterOperatorSetId", underwriterOperatorSetId
-        );
-
-        string memory output = "output";
-        vm.serializeString(output, "operatorSetId", operatorSetId);
-        string memory finalJ = vm.serializeString(output, "operatorSetId", operatorSetId);
-        vm.writeJson(finalJ, "script/output/devnet/operatorSetId.json");
         vm.stopBroadcast();
     }
 }
