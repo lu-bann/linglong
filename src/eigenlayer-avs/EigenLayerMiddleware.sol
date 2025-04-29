@@ -40,6 +40,8 @@ import { IRewardsCoordinator } from
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 
+import { ISignatureUtilsMixinTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
@@ -166,6 +168,20 @@ contract EigenLayerMiddleware is
     // ==============================================================================================
     // ================================= EXTERNAL WRITE FUNCTIONS ==================================
     // ==============================================================================================
+
+    /// @notice Forwards a call to EigenLayer's AVSDirectory contract to confirm operator registration with the AVS
+    /// @param operator The address of the operator to register.
+    /// @param operatorSignature The signature, salt, and expiry of the operator's signature.
+    function registerOperatorToAVS(
+        address operator,
+        ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry memory operatorSignature
+    )
+        public
+        virtual
+        onlyRegistryCoordinator
+    {
+        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
+    }
 
     function addAdminToPermissionController(
         address admin,
@@ -462,7 +478,9 @@ contract EigenLayerMiddleware is
     /// @param metadataURI New metadata URI
     /// @dev Only callable by the contract owner
     function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
-        EigenLayerMiddlewareLib.updateAVSMetadataURI(AVS_DIRECTORY, metadataURI);
+        EigenLayerMiddlewareLib.updateAVSMetadataURI(
+            ALLOCATION_MANAGER, address(this), metadataURI
+        );
     }
 
     /// @notice Sets the address authorized to process reward claims

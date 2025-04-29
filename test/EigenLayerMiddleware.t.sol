@@ -3,8 +3,6 @@ pragma solidity ^0.8.25;
 
 import { EigenlayerDeployer } from "./utils/EigenlayerDeployer.sol";
 import { MockLinglongChallenger } from "./utils/MockChallenger.sol";
-import { ERC20PresetFixedSupplyUpgradeable } from
-    "@eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/contracts/token/ERC20/presets/ERC20PresetFixedSupplyUpgradeable.sol";
 import { IERC20 } from
     "@eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/token/ERC20/IERC20.sol";
 import { IAVSRegistrar } from
@@ -29,8 +27,6 @@ import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
-import { ISignatureUtils } from
-    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtils.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
@@ -49,6 +45,9 @@ import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol"
 import { IPubkeyRegistry } from "src/interfaces/IPubkeyRegistry.sol";
 
 import { G2Operations } from "./ffi/G2Operation.sol";
+
+import { ISignatureUtilsMixinTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { ITaiyiInteractiveChallenger } from
     "src/interfaces/ITaiyiInteractiveChallenger.sol";
 import { ITaiyiRegistryCoordinator } from "src/interfaces/ITaiyiRegistryCoordinator.sol";
@@ -68,8 +67,8 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
     bytes32 public constant VIOLATION_TYPE_URC = keccak256("URC_VIOLATION");
     uint64 public constant COMMITMENT_TYPE_URC = 1;
 
-    address public eigenLayerMiddleware; // Changed to address instead of a contract type
-    EigenLayerMiddleware public middleware; // Add middleware contract variable
+    address public eigenLayerMiddleware;
+    EigenLayerMiddleware public middleware;
     EigenlayerDeployer public eigenLayerDeployer;
     TaiyiRegistryCoordinator public registryCoordinator;
     address public owner;
@@ -454,6 +453,9 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
 
         // Create the operator set directly through middleware
         vm.startPrank(owner);
+
+        middleware.updateAVSMetadataURI("https://taiyi.wtf");
+
         validatorOperatorSetId = middleware.createOperatorSet(
             strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
         );
@@ -828,7 +830,26 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         params.pubkeyRegistrationSignature =
             _signMessage(_operator, blsPubkey, operatorSecret);
 
-        bytes memory formattedData = abi.encode(socket, params);
+        // Construct operator signature required by TaiyiRegistryCoordinator
+        ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry memory operatorSignature;
+        operatorSignature.salt = bytes32(
+            uint256(keccak256(abi.encodePacked(_operator, _opSetId, block.number)))
+        );
+        operatorSignature.expiry = block.timestamp + 1 days;
+        {
+            // compute digest using AVSDirectory helper
+            bytes32 digest = eigenLayerDeployer.avsDirectory()
+                .calculateOperatorAVSRegistrationDigestHash(
+                _operator,
+                eigenLayerMiddleware,
+                operatorSignature.salt,
+                operatorSignature.expiry
+            );
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(operatorSecret, digest);
+            operatorSignature.signature = abi.encodePacked(r, s, v);
+        }
+
+        bytes memory formattedData = abi.encode(socket, params, operatorSignature);
 
         IAllocationManagerTypes.RegisterParams memory registerParams =
         IAllocationManagerTypes.RegisterParams({
@@ -866,7 +887,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         uint32 _opSetId
     )
         internal
-        impersonate(_operator)
+        impersonate(address(_operator))
     {
         // Create the DeregisterParams struct
         IAllocationManagerTypes.DeregisterParams memory params = IAllocationManagerTypes

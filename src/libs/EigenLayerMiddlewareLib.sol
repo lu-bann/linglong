@@ -347,15 +347,17 @@ library EigenLayerMiddlewareLib {
     }
 
     /// @notice Update AVS metadata URI
-    /// @param avsDirectory The AVS directory contract
+    /// @param allocationManager The allocation manager contract
+    /// @param avs The AVS contract
     /// @param metadataURI New metadata URI
     function updateAVSMetadataURI(
-        IAVSDirectory avsDirectory,
+        address allocationManager,
+        address avs,
         string calldata metadataURI
     )
         internal
     {
-        avsDirectory.updateAVSMetadataURI(metadataURI);
+        IAllocationManager(allocationManager).updateAVSMetadataURI(avs, metadataURI);
     }
 
     /// @notice Set the claimer for rewards

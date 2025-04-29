@@ -13,7 +13,7 @@ import { Reverter } from "./lib/Reverter.sol";
 import { WETH9 } from "./lib/WETH.sol";
 
 import { DeployFromScratch } from
-    "../lib/eigenlayer-contracts/script/deploy/local/Deploy_From_Scratch.s.sol";
+    "../lib/eigenlayer-contracts/script/deploy/local/deploy_from_scratch.slashing.s.sol";
 
 import { IAllocationManager } from
     "../lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
