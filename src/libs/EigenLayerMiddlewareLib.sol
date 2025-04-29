@@ -54,6 +54,7 @@ library EigenLayerMiddlewareLib {
     error InvalidRegistrationsLength();
     error OperatorIsSlashed();
     error OperatorSetAlreadyExists();
+    error OnlyOperatorOrOwner();
 
     /// @notice Helper function to deduplicate strategies from operator sets
     /// @param operatorSets Array of operator sets

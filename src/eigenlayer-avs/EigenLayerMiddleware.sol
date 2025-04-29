@@ -183,6 +183,28 @@ contract EigenLayerMiddleware is
         AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
     }
 
+    /// @notice Deregisters an operator from the AVS
+    /// @param operator The address of the operator to deregister
+    /// @param operatorSetIds The IDs of the operator sets to deregister from
+    function deregisterOperatorFromAVS(
+        address operator,
+        uint32[] memory operatorSetIds
+    )
+        public
+        virtual
+    {
+        if (msg.sender != operator && msg.sender != owner()) {
+            revert EigenLayerMiddlewareLib.OnlyOperatorOrOwner();
+        }
+        IAllocationManager(ALLOCATION_MANAGER).deregisterFromOperatorSets(
+            IAllocationManagerTypes.DeregisterParams({
+                operator: operator,
+                avs: address(this),
+                operatorSetIds: operatorSetIds
+            })
+        );
+    }
+
     function addAdminToPermissionController(
         address admin,
         address permissionController
@@ -194,10 +216,10 @@ contract EigenLayerMiddleware is
 
         controller.addPendingAdmin(address(this), admin);
     }
+
     /// @notice Registers multiple validators in a single transaction
     /// @param registrations Array of validator registration parameters
     /// @dev Registers validators with the Registry contract and sends required collateral
-
     function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable

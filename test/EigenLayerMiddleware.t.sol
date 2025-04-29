@@ -887,18 +887,9 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         uint32 _opSetId
     )
         internal
-        impersonate(address(_operator))
+        impersonate(_operator)
     {
-        // Create the DeregisterParams struct
-        IAllocationManagerTypes.DeregisterParams memory params = IAllocationManagerTypes
-            .DeregisterParams({
-            operator: _operator,
-            avs: eigenLayerMiddleware,
-            operatorSetIds: _uint32ToArray(_opSetId)
-        });
-
-        // Deregister from the AVS's operator set
-        eigenLayerDeployer.allocationManager().deregisterFromOperatorSets(params);
+        middleware.deregisterOperatorFromAVS(_operator, _uint32ToArray(_opSetId));
     }
 
     // ==============================================================================================
