@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import { VerificationStatus } from "../types/CommonTypes.sol";
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
@@ -8,23 +9,6 @@ import { ISlasher } from "@urc/ISlasher.sol";
 /// @title ILinglongChallenger
 /// @notice Interface for the LinglongChallenger contract
 interface ILinglongChallenger {
-    /// @notice Challenge status enum
-    /// @dev Used to track the current status of a challenge
-    enum ChallengeStatus {
-        None,
-        Open,
-        Proven,
-        Disproven
-    }
-
-    /// @notice Verification status enum
-    /// @dev Used to indicate the status of proof verification
-    enum VerificationStatus {
-        None,
-        Verified,
-        Invalid
-    }
-
     /// @notice Event emitted when a new challenge is initiated
     /// @param challengeId Unique ID of the challenge
     /// @param registrationRoot Registration root of the challenged validator
@@ -58,7 +42,6 @@ interface ILinglongChallenger {
     /// @return status The status of the verification
     function verifyProof(bytes memory payload)
         external
-        view
         returns (VerificationStatus status);
 
     /// @notice Initiates a challenge against an operator for a specific commitment
@@ -74,6 +57,7 @@ interface ILinglongChallenger {
         bytes calldata signature
     )
         external
+        payable
         returns (bytes32);
 
     /// @notice Resolves a challenge

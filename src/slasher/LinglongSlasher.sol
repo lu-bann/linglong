@@ -29,6 +29,7 @@ import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinat
 
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { LinglongSlasherStorage } from "../storage/LinglongSlasherStorage.sol";
+import { VerificationStatus } from "../types/CommonTypes.sol";
 
 /// @title LinglongSlasher
 /// @notice Implementation of the ILinglongSlasher interface that bridges between URC's slashing system
@@ -363,8 +364,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         bytes memory payload
     )
         internal
-        view
-        returns (ILinglongChallenger.VerificationStatus)
+        returns (VerificationStatus)
     {
         // Decode the original payload for verification
         (bytes memory decodedPayload) = abi.decode(payload, (bytes));
@@ -416,10 +416,9 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         returns (bool)
     {
         // First verify the proof
-        ILinglongChallenger.VerificationStatus status =
-            _verifyChallenger(challengerContract, payload);
+        VerificationStatus status = _verifyChallenger(challengerContract, payload);
 
-        if (status != ILinglongChallenger.VerificationStatus.Verified) {
+        if (status != VerificationStatus.Verified) {
             revert ProofVerificationFailed();
         }
 
@@ -479,10 +478,9 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         returns (bool)
     {
         // First verify the proof
-        ILinglongChallenger.VerificationStatus status =
-            _verifyChallenger(challengerContract, payload);
+        VerificationStatus status = _verifyChallenger(challengerContract, payload);
 
-        if (status != ILinglongChallenger.VerificationStatus.Verified) {
+        if (status != VerificationStatus.Verified) {
             revert ProofVerificationFailed();
         }
 
