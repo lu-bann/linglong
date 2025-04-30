@@ -2,6 +2,8 @@
 pragma solidity ^0.8.25;
 
 import { ILinglongChallenger } from "../../src/interfaces/ILinglongChallenger.sol";
+
+import { ChallengeStatus, VerificationStatus } from "../../src/types/CommonTypes.sol";
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
@@ -91,6 +93,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
         bytes calldata signature
     )
         external
+        payable
         override
         returns (bytes32)
     {

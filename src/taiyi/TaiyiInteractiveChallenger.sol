@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
+import { ILinglongChallenger } from "../interfaces/ILinglongChallenger.sol";
 import { ITaiyiInteractiveChallenger } from
     "../interfaces/ITaiyiInteractiveChallenger.sol";
 import { ITaiyiParameterManager } from "../interfaces/ITaiyiParameterManager.sol";
@@ -15,7 +16,14 @@ import { ISP1Verifier } from "@sp1-contracts/ISP1Verifier.sol";
 
 import { PreconfRequestLib } from "../libs/PreconfRequestLib.sol";
 
-contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
+import { ChallengeStatus, VerificationStatus } from "../types/CommonTypes.sol";
+import { ISlasher } from "@urc/ISlasher.sol";
+
+contract TaiyiInteractiveChallenger is
+    ITaiyiInteractiveChallenger,
+    ILinglongChallenger,
+    Ownable
+{
     using EnumerableSet for EnumerableSet.Bytes32Set;
 
     /// @notice The address of the SP1 verifier contract.
@@ -41,11 +49,27 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
     /// @notice Count of open challenges.
     uint256 public openChallengeCount;
 
+    /// @notice The amount to slash for a violation.
+    uint256 public slashAmount;
+
+    /// @notice The slashId counter.
+    uint256 public slashIdCounter;
+
+    /// @notice Operator to slashId mapping.
+    mapping(address => uint256) public operatorToSlashId;
+
+    /// @notice The slashId to operator mapping.
+    mapping(uint256 => address) public slashIdToOperator;
+
+    /// @notice The mapping for the slashing progress.
+    mapping(uint256 => bool) public slashingInProgress;
+
     constructor(
         address _initialOwner,
         address _verifierGateway,
         bytes32 _interactiveFraudProofVKey,
-        address _parameterManagerAddress
+        address _parameterManagerAddress,
+        uint256 _slashAmount
     )
         Ownable(_initialOwner)
     {
@@ -53,6 +77,7 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         interactiveFraudProofVKey = _interactiveFraudProofVKey;
         parameterManager = ITaiyiParameterManager(_parameterManagerAddress);
         openChallengeCount = 0;
+        slashAmount = _slashAmount;
     }
 
     /// @inheritdoc ITaiyiInteractiveChallenger
@@ -108,13 +133,14 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         return challenges[id];
     }
 
-    /// @inheritdoc ITaiyiInteractiveChallenger
     function createChallengeAType(
-        PreconfRequestAType calldata preconfRequestAType,
+        bytes32 registrationRoot,
+        address operator,
+        PreconfRequestAType memory preconfRequestAType,
         bytes calldata signature
     )
-        external
-        payable
+        internal
+        returns (bytes32)
     {
         // Check challenge bond
         if (msg.value != parameterManager.challengeBond()) {
@@ -169,17 +195,24 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         );
         openChallengeCount++;
 
-        // Emit challenge opened event
-        emit ChallengeOpened(challengeId, msg.sender, signer);
+        emit ChallengeInitiated(
+            challengeId,
+            bytes32(0), // FIXME: Where to get registration root?
+            signer,
+            msg.sender
+        );
+
+        return challengeId;
     }
 
-    /// @inheritdoc ITaiyiInteractiveChallenger
     function createChallengeBType(
-        PreconfRequestBType calldata preconfRequestBType,
+        bytes32 registrationRoot,
+        address operator,
+        PreconfRequestBType memory preconfRequestBType,
         bytes calldata signature
     )
-        external
-        payable
+        internal
+        returns (bytes32)
     {
         // Check challenge bond
         if (msg.value != parameterManager.challengeBond()) {
@@ -239,8 +272,14 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
         challenges[challengeId] = challenge;
         openChallengeCount++;
 
-        // Emit challenge opened event
-        emit ChallengeOpened(challengeId, msg.sender, signer);
+        emit ChallengeInitiated(
+            challengeId,
+            bytes32(0), // FIXME: Where to get registration root?
+            signer,
+            msg.sender
+        );
+
+        return challengeId;
     }
 
     /// @inheritdoc ITaiyiInteractiveChallenger
@@ -262,18 +301,24 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             revert ChallengeNotExpired();
         }
 
-        challenges[id].status = ChallengeStatus.Succeded;
+        challenges[id].status = ChallengeStatus.Proven;
         openChallengeCount--;
-        emit ChallengeSucceded(id);
+
+        emit ChallengeResolved(id, challenge.commitmentSigner, msg.sender, true);
     }
 
-    /// @inheritdoc ITaiyiInteractiveChallenger
+    /// @notice The entrypoint for defending against an open challenge using a SP1 proof of execution.
+    /// @param id The id of the challenge to defend against.
+    /// @param proofValues The encoded public values.
+    /// @param proofBytes The encoded proof.
+    /// @return status The status of the verification.
     function prove(
         bytes32 id,
-        bytes calldata proofValues,
-        bytes calldata proofBytes
+        bytes memory proofValues,
+        bytes memory proofBytes
     )
-        external
+        internal
+        returns (VerificationStatus status)
     {
         if (!challengeIDs.contains(id)) {
             revert ChallengeDoesNotExist();
@@ -358,13 +403,159 @@ contract TaiyiInteractiveChallenger is ITaiyiInteractiveChallenger, Ownable {
             revert TaiyiCoreAddressDoesNotMatch();
         }
 
-        challenges[id].status = ChallengeStatus.Failed;
+        challenges[id].status = ChallengeStatus.Disproven;
         openChallengeCount--;
-        emit ChallengeFailed(id);
+
+        emit ChallengeResolved(id, challenge.commitmentSigner, msg.sender, false);
+        return VerificationStatus.Verified;
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function verifyProof(bytes memory payload)
+        external
+        returns (VerificationStatus status)
+    {
+        (bytes32 id, bytes memory proofValues, bytes memory proofBytes) =
+            abi.decode(payload, (bytes32, bytes, bytes));
+
+        return prove(id, proofValues, proofBytes);
     }
 
     function _getSlotFromTimestamp(uint256 timestamp) internal view returns (uint256) {
         return (timestamp - parameterManager.genesisTimestamp())
             / parameterManager.slotTime();
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function initiateChallenge(
+        bytes32 registrationRoot,
+        address operator,
+        bytes calldata commitmentData,
+        bytes calldata signature
+    )
+        external
+        payable
+        returns (bytes32)
+    {
+        (uint256 commitmentType, bytes memory data) =
+            abi.decode(commitmentData, (uint256, bytes));
+
+        if (commitmentType == 0) {
+            // Decode preconf request from commitment data
+            PreconfRequestAType memory preconfRequestAType =
+                abi.decode(data, (PreconfRequestAType));
+
+            return createChallengeAType(
+                registrationRoot, operator, preconfRequestAType, signature
+            );
+        } else {
+            return createChallengeBType(
+                registrationRoot,
+                operator,
+                abi.decode(data, (PreconfRequestBType)),
+                signature
+            );
+        }
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function getImplementationName() external view returns (string memory) {
+        return "TaiyiInteractiveChallenger";
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function shouldInstantSlash(
+        bytes32 registrationRoot,
+        ISlasher.SignedCommitment memory signedCommitment,
+        bytes memory evidence
+    )
+        external
+        view
+        returns (bool)
+    {
+        return false;
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function getOperatorSlashingAmount(
+        address operator,
+        bytes32 registrationRoot
+    )
+        external
+        view
+        returns (uint256)
+    {
+        return slashAmount;
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function getSupportedViolationType() external view returns (bytes32) {
+        return keccak256("URC_VIOLATION");
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function supportedViolationType(bytes32 violationType) external view returns (bool) {
+        return violationType == keccak256("URC_VIOLATION");
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function isInstantSlashing() external view returns (bool) {
+        return false;
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function getSlashAmount() external view returns (uint256) {
+        return slashAmount;
+    }
+
+    function setSlashAmount(uint256 _slashAmount) external onlyOwner {
+        slashAmount = _slashAmount;
+    }
+
+    /// @inheritdoc ILinglongChallenger
+    function isSlashingInProgress(
+        address operator,
+        uint96 operatorSetId
+    )
+        external
+        view
+        returns (bool inProgress, uint256 slashingId)
+    {
+        // TODO: Can a operator have multiple slash in progress? What to do with ids if so?
+        uint256 slashId = operatorToSlashId[operator];
+        return (slashingInProgress[slashId], slashId);
+    }
+
+    // Mock functions for testing purposes
+
+    /// @notice Mock function used for testing purposes
+    /// @inheritdoc ILinglongChallenger
+    function resolveChallenge(bytes32 challengeId, bool proven) external {
+        Challenge storage challenge = challenges[challengeId];
+
+        // Basic validation
+        require(challenge.id != bytes32(0), "Challenge not found");
+        require(challenge.status == ChallengeStatus.Open, "Challenge already resolved");
+
+        // Update challenge status
+        challenge.status = proven ? ChallengeStatus.Proven : ChallengeStatus.Disproven;
+
+        // Emit the event
+        emit ChallengeResolved(
+            challengeId, challenge.commitmentSigner, msg.sender, proven
+        );
+    }
+
+    /// @notice Mock function used for testing purposes
+    function setSlashingInProgress(
+        uint256 slashingId,
+        address operator,
+        bool value
+    )
+        external
+    {
+        slashingInProgress[slashingId] = value;
+        operatorToSlashId[operator] = slashingId;
+        slashIdToOperator[slashingId] = operator;
     }
 }
