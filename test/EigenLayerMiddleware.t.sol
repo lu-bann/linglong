@@ -58,6 +58,7 @@ import { SocketRegistry } from "src/operator-registries/SocketRegistry.sol";
 import { TaiyiRegistryCoordinator } from
     "src/operator-registries/TaiyiRegistryCoordinator.sol";
 import { LinglongSlasher } from "src/slasher/LinglongSlasher.sol";
+import { ChallengeStatus } from "src/types/CommonTypes.sol";
 
 contract EigenlayerMiddlewareTest is Test, G2Operations {
     using OperatorSubsetLib for uint32;
@@ -1181,7 +1182,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
             createdAt: block.timestamp,
             challenger: challenger,
             commitmentSigner: primaryOp,
-            status: ITaiyiInteractiveChallenger.ChallengeStatus.Open,
+            status: ChallengeStatus.Open,
             preconfType: 0,
             commitmentData: new bytes(0),
             signature: new bytes(0)

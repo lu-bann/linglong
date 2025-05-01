@@ -38,6 +38,8 @@ import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { Registry } from "@urc/Registry.sol";
 import { BLS } from "@urc/lib/BLS.sol";
+
+import { ChallengeStatus } from "../src/types/CommonTypes.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 
@@ -271,7 +273,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
             createdAt: block.timestamp,
             challenger: challenger,
             commitmentSigner: operator,
-            status: ITaiyiInteractiveChallenger.ChallengeStatus.Open,
+            status: ChallengeStatus.Open,
             preconfType: 0,
             commitmentData: new bytes(0),
             signature: new bytes(0)

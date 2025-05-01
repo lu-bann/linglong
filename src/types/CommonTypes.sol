@@ -21,3 +21,20 @@ struct DelegationStore {
     // index -> validator pubKey Hash
     EnumerableMapLib.Uint256ToBytes32Map delegationMap;
 }
+
+/// @notice Challenge status enum
+/// @dev Used to track the current status of a challenge
+enum ChallengeStatus {
+    None,
+    Open,
+    Proven,
+    Disproven
+}
+
+/// @notice Verification status enum
+/// @dev Used to indicate the status of proof verification
+enum VerificationStatus {
+    None,
+    Verified,
+    Invalid
+}

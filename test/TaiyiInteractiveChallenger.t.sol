@@ -11,6 +11,9 @@ import { ITaiyiInteractiveChallenger } from
 import { TaiyiParameterManager } from "../src/taiyi/TaiyiParameterManager.sol";
 
 import { PreconfRequestLib } from "../src/libs/PreconfRequestLib.sol";
+
+import { ILinglongChallenger } from "../src/interfaces/ILinglongChallenger.sol";
+import { ChallengeStatus } from "../src/types/CommonTypes.sol";
 import { PreconfRequestAType } from "../src/types/PreconfRequestATypes.sol";
 import {
     BlockspaceAllocation,
@@ -20,6 +23,9 @@ import { Ownable } from "@openzeppelin-contracts/contracts/access/Ownable.sol";
 import { SP1Verifier } from "@sp1-contracts/v4.0.0-rc.3/SP1VerifierPlonk.sol";
 
 contract TaiyiInteractiveChallengerTest is Test {
+    bytes32 testRegistrationRoot = bytes32(0);
+    uint256 slashAmount = 1 ether;
+
     address verifierAddress;
     address user;
     address owner;
@@ -58,7 +64,7 @@ contract TaiyiInteractiveChallengerTest is Test {
         );
 
         taiyiInteractiveChallenger = new TaiyiInteractiveChallenger(
-            owner, verifierAddress, bytes32(0x0), address(parameterManager)
+            owner, verifierAddress, bytes32(0x0), address(parameterManager), slashAmount
         );
     }
 
@@ -199,10 +205,15 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         // Expect event
         vm.expectEmit(true, true, true, false);
-        emit ITaiyiInteractiveChallenger.ChallengeOpened(challengeId, user, underwriter);
+        emit ILinglongChallenger.ChallengeInitiated(
+            challengeId, bytes32(0), underwriter, user
+        );
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -242,8 +253,11 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -289,10 +303,15 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         // Expect event
         vm.expectEmit(true, true, true, false);
-        emit ITaiyiInteractiveChallenger.ChallengeOpened(challengeId, user, underwriter);
+        emit ILinglongChallenger.ChallengeInitiated(
+            challengeId, bytes32(0), underwriter, user
+        );
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -339,10 +358,15 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         // Expect event
         vm.expectEmit(true, true, true, false);
-        emit ITaiyiInteractiveChallenger.ChallengeOpened(challengeId, user, underwriter);
+        emit ILinglongChallenger.ChallengeInitiated(
+            challengeId, bytes32(0), underwriter, user
+        );
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -367,8 +391,11 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeBondInvalid.selector);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: 0 }(
-            preconfRequestAType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: 0 }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -409,10 +436,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeBondInvalid.selector);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: 0 }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: 0 }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -454,16 +484,19 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.ChallengeAlreadyExists.selector
         );
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -506,16 +539,19 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.ChallengeAlreadyExists.selector
         );
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -559,12 +595,15 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.TargetSlotNotInChallengeCreationWindow.selector
         );
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -609,12 +648,15 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         vm.expectPartialRevert(
             ITaiyiInteractiveChallenger.TargetSlotNotInChallengeCreationWindow.selector
         );
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -656,10 +698,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.BlockNotFinalized.selector);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -702,10 +747,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.BlockNotFinalized.selector);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.stopPrank();
@@ -746,10 +794,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         // Skip duration so the challenge is expired
@@ -797,10 +848,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         // Skip duration so the challenge is expired
@@ -847,10 +901,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeNotExpired.selector);
@@ -897,10 +954,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeNotExpired.selector);
@@ -948,8 +1008,11 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeDoesNotExist.selector);
@@ -1000,8 +1063,11 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         vm.expectPartialRevert(ITaiyiInteractiveChallenger.ChallengeDoesNotExist.selector);
@@ -1055,10 +1121,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         ITaiyiInteractiveChallenger.Challenge[] memory openChallenges =
@@ -1067,8 +1136,8 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        taiyiInteractiveChallenger.prove(
-            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        taiyiInteractiveChallenger.verifyProof(
+            abi.encode(challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes)
         );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
@@ -1119,10 +1188,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         ITaiyiInteractiveChallenger.Challenge[] memory openChallenges =
@@ -1131,8 +1203,8 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        taiyiInteractiveChallenger.prove(
-            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        taiyiInteractiveChallenger.verifyProof(
+            abi.encode(challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes)
         );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
@@ -1183,10 +1255,14 @@ contract TaiyiInteractiveChallengerTest is Test {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
+
+        bytes memory commitmentData =
+            abi.encode(uint256(1), abi.encode(preconfRequestBType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeBType{ value: bond }(
-            preconfRequestBType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         ITaiyiInteractiveChallenger.Challenge[] memory openChallenges =
@@ -1195,8 +1271,8 @@ contract TaiyiInteractiveChallengerTest is Test {
         assertEq(openChallenges.length, 1);
         assertEq(openChallenges[0].id, challengeId);
 
-        taiyiInteractiveChallenger.prove(
-            challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes
+        taiyiInteractiveChallenger.verifyProof(
+            abi.encode(challengeId, proofData.proofValuesBytes, proofData.proofBytesBytes)
         );
 
         openChallenges = taiyiInteractiveChallenger.getOpenChallenges();
@@ -1289,10 +1365,13 @@ contract TaiyiInteractiveChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(underwriterPrivateKey, dataHash);
         bytes memory signature = abi.encodePacked(r, s, v);
 
+        bytes memory commitmentData =
+            abi.encode(uint256(0), abi.encode(preconfRequestAType));
+
         bytes32 challengeId = keccak256(signature);
 
-        taiyiInteractiveChallenger.createChallengeAType{ value: bond }(
-            preconfRequestAType, signature
+        taiyiInteractiveChallenger.initiateChallenge{ value: bond }(
+            testRegistrationRoot, underwriter, commitmentData, signature
         );
 
         ITaiyiInteractiveChallenger.Challenge memory challenge =
@@ -1302,7 +1381,7 @@ contract TaiyiInteractiveChallengerTest is Test {
         // TODO[Martin]: Check challenge.createdAt
         assertEq(challenge.challenger, user);
         assertEq(challenge.commitmentSigner, underwriter);
-        assertTrue(challenge.status == ITaiyiInteractiveChallenger.ChallengeStatus.Open);
+        assertTrue(challenge.status == ChallengeStatus.Open);
         assertEq(challenge.preconfType, 0);
         assertEq(challenge.commitmentData, abi.encode(preconfRequestAType));
         assertEq(challenge.signature, signature);
