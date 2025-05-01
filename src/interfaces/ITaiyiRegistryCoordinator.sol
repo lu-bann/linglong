@@ -146,6 +146,7 @@ interface ITaiyiRegistryCoordinator {
     /// @param data Additional data required for registration
     function registerOperator(
         address operator,
+        address avs,
         uint32[] memory operatorSetIds,
         bytes calldata data
     )
@@ -156,6 +157,7 @@ interface ITaiyiRegistryCoordinator {
     /// @param operatorSetIds The operator set IDs to deregister the operator from
     function deregisterOperator(
         address operator,
+        address avs,
         uint32[] memory operatorSetIds
     )
         external;

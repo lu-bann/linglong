@@ -40,6 +40,8 @@ import { IRewardsCoordinator } from
 import { IRewardsCoordinatorTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 
+import { ISignatureUtilsMixinTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
@@ -167,6 +169,42 @@ contract EigenLayerMiddleware is
     // ================================= EXTERNAL WRITE FUNCTIONS ==================================
     // ==============================================================================================
 
+    /// @notice Forwards a call to EigenLayer's AVSDirectory contract to confirm operator registration with the AVS
+    /// @param operator The address of the operator to register.
+    /// @param operatorSignature The signature, salt, and expiry of the operator's signature.
+    function registerOperatorToAVS(
+        address operator,
+        ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry memory operatorSignature
+    )
+        public
+        virtual
+        onlyRegistryCoordinator
+    {
+        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
+    }
+
+    /// @notice Deregisters an operator from the AVS
+    /// @param operator The address of the operator to deregister
+    /// @param operatorSetIds The IDs of the operator sets to deregister from
+    function deregisterOperatorFromAVS(
+        address operator,
+        uint32[] memory operatorSetIds
+    )
+        public
+        virtual
+    {
+        if (msg.sender != operator && msg.sender != owner()) {
+            revert EigenLayerMiddlewareLib.OnlyOperatorOrOwner();
+        }
+        IAllocationManager(ALLOCATION_MANAGER).deregisterFromOperatorSets(
+            IAllocationManagerTypes.DeregisterParams({
+                operator: operator,
+                avs: address(this),
+                operatorSetIds: operatorSetIds
+            })
+        );
+    }
+
     function addAdminToPermissionController(
         address admin,
         address permissionController
@@ -178,10 +216,10 @@ contract EigenLayerMiddleware is
 
         controller.addPendingAdmin(address(this), admin);
     }
+
     /// @notice Registers multiple validators in a single transaction
     /// @param registrations Array of validator registration parameters
     /// @dev Registers validators with the Registry contract and sends required collateral
-
     function registerValidators(IRegistry.SignedRegistration[] calldata registrations)
         external
         payable
@@ -462,7 +500,9 @@ contract EigenLayerMiddleware is
     /// @param metadataURI New metadata URI
     /// @dev Only callable by the contract owner
     function updateAVSMetadataURI(string calldata metadataURI) external onlyOwner {
-        EigenLayerMiddlewareLib.updateAVSMetadataURI(AVS_DIRECTORY, metadataURI);
+        EigenLayerMiddlewareLib.updateAVSMetadataURI(
+            ALLOCATION_MANAGER, address(this), metadataURI
+        );
     }
 
     /// @notice Sets the address authorized to process reward claims

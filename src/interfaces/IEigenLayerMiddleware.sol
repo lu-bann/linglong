@@ -9,6 +9,9 @@ import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import { IRewardsCoordinator } from
     "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
+
+import { ISignatureUtilsMixinTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
@@ -82,6 +85,15 @@ interface IEigenLayerMiddleware {
     }
 
     // ========= FUNCTIONS =========
+
+    /// @notice Registers an operator to the AVS
+    /// @param operator The address of the operator to register
+    /// @param operatorSignature The signature, salt, and expiry of the operator's signature
+    function registerOperatorToAVS(
+        address operator,
+        ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry memory operatorSignature
+    )
+        external;
 
     /// @notice Initialize the middleware contract with configuration
     /// @param owner Address that will own the contract

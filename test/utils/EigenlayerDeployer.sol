@@ -7,6 +7,9 @@ import "@eigenlayer-contracts/src/contracts/core/AllocationManager.sol";
 import "@eigenlayer-contracts/src/contracts/core/DelegationManager.sol";
 
 import "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
+
+import { IRewardsCoordinatorTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 import "@eigenlayer-contracts/src/contracts/permissions/PermissionController.sol";
 import "forge-std/StdJson.sol";
 
@@ -335,7 +338,7 @@ contract EigenlayerDeployer is Operators {
             stdJson.readAddress(operatorConfigJson, ".ethPOSDepositAddress")
         );
         eigenPodImplementation =
-            new EigenPod(ethPOSDeposit, eigenPodManager, GOERLI_GENESIS_TIME);
+            new EigenPod(ethPOSDeposit, eigenPodManager, GOERLI_GENESIS_TIME, "v1.0.0");
 
         eigenPodBeacon = new UpgradeableBeacon(address(eigenPodImplementation));
 
@@ -347,26 +350,30 @@ contract EigenlayerDeployer is Operators {
             allocationManager,
             eigenLayerPauserReg,
             permissionController,
-            MIN_WITHDRAWAL_DELAY
+            MIN_WITHDRAWAL_DELAY,
+            "v1.0.0"
         );
         StrategyManager strategyManagerImplementation =
-            new StrategyManager(delegation, eigenLayerPauserReg);
+            new StrategyManager(delegation, eigenLayerPauserReg, "v1.0.0");
         AVSDirectory avsDirectoryImplementation =
-            new AVSDirectory(delegation, eigenLayerPauserReg);
+            new AVSDirectory(delegation, eigenLayerPauserReg, "v1.0.0");
         EigenPodManager eigenPodManagerImplementation = new EigenPodManager(
-            ethPOSDeposit, eigenPodBeacon, delegation, eigenLayerPauserReg
+            ethPOSDeposit, eigenPodBeacon, delegation, eigenLayerPauserReg, "v1.0.0"
         );
         RewardsCoordinator rewardsCoordinatorImplementation = new RewardsCoordinator(
-            delegation,
-            strategyManager,
-            allocationManager,
-            eigenLayerPauserReg,
-            permissionController,
-            REWARDS_COORDINATOR_CALCULATION_INTERVAL_SECONDS,
-            REWARDS_COORDINATOR_MAX_REWARDS_DURATION,
-            REWARDS_COORDINATOR_MAX_RETROACTIVE_LENGTH,
-            REWARDS_COORDINATOR_MAX_FUTURE_LENGTH,
-            REWARDS_COORDINATOR_GENESIS_REWARDS_TIMESTAMP
+            IRewardsCoordinatorTypes.RewardsCoordinatorConstructorParams(
+                delegation,
+                strategyManager,
+                allocationManager,
+                eigenLayerPauserReg,
+                permissionController,
+                REWARDS_COORDINATOR_CALCULATION_INTERVAL_SECONDS,
+                REWARDS_COORDINATOR_MAX_REWARDS_DURATION,
+                REWARDS_COORDINATOR_MAX_RETROACTIVE_LENGTH,
+                REWARDS_COORDINATOR_MAX_FUTURE_LENGTH,
+                REWARDS_COORDINATOR_GENESIS_REWARDS_TIMESTAMP,
+                "v1.0.0"
+            )
         );
 
         AllocationManager allocationManagerImplementation = new AllocationManager(
@@ -374,10 +381,11 @@ contract EigenlayerDeployer is Operators {
             eigenLayerPauserReg,
             permissionController,
             DEALLOCATION_DELAY,
-            ALLOCATION_CONFIGURATION_DELAY
+            ALLOCATION_CONFIGURATION_DELAY,
+            "v1.0.0"
         );
         PermissionController permissionControllerImplementation =
-            new PermissionController();
+            new PermissionController("v1.0.0");
 
         // Third, upgrade the proxy contracts to use the correct implementation
         // contracts and initialize them.
@@ -486,7 +494,7 @@ contract EigenlayerDeployer is Operators {
         // deploy StrategyBase contract implementation, then create upgradeable
         // proxy that points to implementation and initialize it
         baseStrategyImplementation =
-            new StrategyBase(strategyManager, eigenLayerPauserReg);
+            new StrategyBase(strategyManager, eigenLayerPauserReg, "v1.0.0");
         wethStrat = StrategyBase(
             address(
                 new TransparentUpgradeableProxy(

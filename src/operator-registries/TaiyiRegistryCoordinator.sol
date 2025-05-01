@@ -4,11 +4,11 @@ pragma solidity ^0.8.27;
 import { IPubkeyRegistry } from "../interfaces/IPubkeyRegistry.sol";
 import { ISocketRegistry } from "../interfaces/ISocketRegistry.sol";
 
+import { IEigenLayerMiddleware } from "../interfaces/IEigenLayerMiddleware.sol";
 import { ISymbioticNetworkMiddleware } from
     "../interfaces/ISymbioticNetworkMiddleware.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 import { BN254 } from "../libs/BN254.sol";
-
 import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { RestakingProtocolMapLib } from "../libs/RestakingProtocolMapLib.sol";
 import { SafeCast96To32Lib } from "../libs/SafeCast96To32Lib.sol";
@@ -25,10 +25,13 @@ import {
 
 import { IDelegationManager } from
     "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
+import {
+    ISignatureUtilsMixin,
+    ISignatureUtilsMixinTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-
 import { Pausable } from "@eigenlayer-contracts/src/contracts/permissions/Pausable.sol";
 import { OwnableUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
@@ -131,6 +134,7 @@ contract TaiyiRegistryCoordinator is
     /// @inheritdoc IAVSRegistrar
     function registerOperator(
         address operator,
+        address, /*avs*/
         uint32[] memory operatorSetIds,
         bytes calldata data
     )
@@ -148,6 +152,7 @@ contract TaiyiRegistryCoordinator is
     /// @inheritdoc IAVSRegistrar
     function deregisterOperator(
         address operator,
+        address, /*avs*/
         uint32[] memory operatorSetIds
     )
         external
@@ -229,6 +234,11 @@ contract TaiyiRegistryCoordinator is
     // ==============================================================================================
     // ================================= EXTERNAL VIEW FUNCTIONS ===================================
     // ==============================================================================================
+
+    /// @inheritdoc IAVSRegistrar
+    function supportsAVS(address avs) external view returns (bool) {
+        return avs == eigenLayerMiddleware;
+    }
 
     /// @notice Gets all registered middleware addresses
     /// @return Array of middleware addresses
@@ -685,23 +695,6 @@ contract TaiyiRegistryCoordinator is
         emit RestakingMiddlewareUpdated(_restakingProtocol, _restakingMiddleware);
     }
 
-    function _deregisterOperatorFromOperatorSets(
-        address operator,
-        uint32[] memory operatorSetIds
-    )
-        internal
-        virtual
-    {
-        address avs = msg.sender;
-        allocationManager.deregisterFromOperatorSets(
-            IAllocationManagerTypes.DeregisterParams({
-                operator: operator,
-                avs: avs,
-                operatorSetIds: operatorSetIds
-            })
-        );
-    }
-
     /// @notice Fetches an operator's pubkey hash from the PubkeyRegistry. If the
     /// operator has not registered a pubkey, attempts to register a pubkey using
     /// `params`
@@ -739,12 +732,21 @@ contract TaiyiRegistryCoordinator is
         internal
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
-        require(
-            operatorInfo.status != OperatorStatus.REGISTERED, OperatorAlreadyRegistered()
-        );
+        bool operatorRegisteredBefore =
+            _operatorInfo[operator].status == OperatorStatus.REGISTERED;
 
-        (string memory socket, IPubkeyRegistry.PubkeyRegistrationParams memory params) =
-            abi.decode(data, (string, IPubkeyRegistry.PubkeyRegistrationParams));
+        (
+            string memory socket,
+            IPubkeyRegistry.PubkeyRegistrationParams memory params,
+            ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry memory operatorSignature
+        ) = abi.decode(
+            data,
+            (
+                string,
+                IPubkeyRegistry.PubkeyRegistrationParams,
+                ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry
+            )
+        );
 
         /// If the operator has NEVER registered a pubkey before, use `params` to register
         /// their pubkey in pubkeyRegistry
@@ -764,6 +766,12 @@ contract TaiyiRegistryCoordinator is
             require(stakes[i] >= minStake, "Stake below set minimum");
         }
 
+        if (!operatorRegisteredBefore) {
+            IEigenLayerMiddleware(eigenLayerMiddleware).registerOperatorToAVS(
+                operator, operatorSignature
+            );
+        }
+
         // Use the library function to add operator to sets
         _operatorSets.addOperatorToSets32(
             operatorSetIds, RestakingProtocol.EIGENLAYER, operator
@@ -779,11 +787,15 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
-        _deregisterOperatorFromOperatorSets(operator, operatorSetIds);
         operatorInfo.status = OperatorStatus.DEREGISTERED;
+        uint32[] memory baseOperatorSetIds = new uint32[](operatorSetIds.length);
+        for (uint256 i = 0; i < operatorSetIds.length; i++) {
+            (, uint32 baseId) = operatorSetIds[i].decodeOperatorSetId32();
+            baseOperatorSetIds[i] = baseId;
+        }
 
         _operatorSets.removeOperatorFromSets32(
-            operatorSetIds, RestakingProtocol.EIGENLAYER, operator
+            baseOperatorSetIds, RestakingProtocol.EIGENLAYER, operator
         );
     }
 

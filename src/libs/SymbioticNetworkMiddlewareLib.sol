@@ -62,7 +62,9 @@ library SymbioticNetworkMiddlewareLib {
         }
 
         // Pass the compatible uint32 array directly
-        registryCoordinator.registerOperator(operator, compatibleIds, bytes(""));
+        registryCoordinator.registerOperator(
+            operator, address(this), compatibleIds, bytes("")
+        );
     }
 
     /// @notice Verify an operator's key
