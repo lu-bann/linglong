@@ -22,6 +22,7 @@ The contract is **UUPS-upgradeable** and owned by the AVS governance.
 
 ```mermaid
 sequenceDiagram
+    participant Owner
     participant Operator
     participant Middleware as EigenLayerMiddleware
     participant Coord as TaiyiRegistryCoordinator
@@ -29,19 +30,24 @@ sequenceDiagram
     participant URCReg as URC Registry
     participant Slasher as LinglongSlasher
 
-    %% Operator Registration
-    Operator->>Middleware: createOperatorSet() / registerValidators()
+    %% Operator Set Creation
+    Owner->>Middleware: createOperatorSet() 
     Middleware->>Coord: createOperatorSet()
     Coord-->>Middleware: operatorSetId
     Note right of Middleware: emits <OperatorSetCreated>
+
+    %% Operator Registration
+    Operator->>Alloc: modifyAllocation()
+    Operator->>Alloc: registerForOperatorSets()
+    Alloc-->>Coord: registerOperator()
+    Alloc-->>Coord: success
+
 
     %% Validator registration
     Operator->>Middleware: registerValidators(registrations)
     Middleware->>URCReg: Registry.register(...)
     URCReg-->>Middleware: registrationRoot
-    Middleware->>Coord: registerOperator(operatorSetId, data)
-    Coord-->>Alloc: IAVSRegistrar.registerOperator(...)
-    Alloc-->>Coord: success
+
 
     %% Opt-in to slasher
     Operator->>Middleware: optInToSlasher(registrationRoot, ...)
@@ -60,10 +66,9 @@ sequenceDiagram
 1. **Owner** (AVS governance) calls `createOperatorSet(strategies, type, minStake)`
    * Wrapper around `AllocationManager.createOperatorSet` through the coordinator.
    * Returns an `operatorSetId` ( `uint32` or `uint96` encoded).
-2. **Operator** calls `registerValidators` with an array of `IRegistry.SignedRegistration`.
-   * Middleware forwards to URC `Registry` which mints a Merkle root and stores collateral.
-   * After Registry returns, the middleware relays the registration to `TaiyiRegistryCoordinator.registerOperator` ( EigenLayer path ).
-3. `TaiyiRegistryCoordinator` validates the call ( `onlyRestakingMiddleware` ) and finally calls `AllocationManager.registerOperator`.
+2. **Operator** calls `AllocationManager.modifyAllocation` then `AllocationManager.registerForOperatorSets`
+   * Callback from `AllocationManager` calls `TaiyiRegistryCoordinator.registerOperator`, which is required by interface `IAVSRegistrar`
+3. `TaiyiRegistryCoordinator` validates the call ( `onlyRestakingMiddleware` ) and record the operator locally.
 
 > The **socket** and **pubkey** of the operator can be updated later via the coordinator.
 
