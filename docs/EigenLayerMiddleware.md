@@ -126,6 +126,6 @@ Once opted-in, `Registry` will forward any future `slashCommitment`/`slashRegist
 
 ## External References
 * EigenLayer [docs](https://docs.eigenlayer.xyz/)
-* URC protocol description – <https://github.com/restaking-systems/urc>
+* URC – <https://github.com/eth-fabric/urc>
 
 ---
