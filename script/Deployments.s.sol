@@ -105,8 +105,11 @@ contract Deploy is Script, Test {
         DeployFromScratch deployFromScratch = new DeployFromScratch();
         deployFromScratch.run(configFileName);
 
-        string memory outputFile =
-            string(bytes("script/output/devnet/M2_from_scratch_deployment_data.json"));
+        string memory outputFile = string(
+            bytes(
+                "script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json"
+            )
+        );
         string memory output_data = vm.readFile(outputFile);
 
         // whitelist weth
@@ -209,6 +212,7 @@ contract Deploy is Script, Test {
                 implOwner,
                 0,
                 allocationManager,
+                address(deployedContracts.eigenLayerMiddleware),
                 eigenPauserReg
             )
         );
