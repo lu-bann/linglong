@@ -127,11 +127,9 @@ contract TaiyiRegistryCoordinator is
             allocationManager = IAllocationManager(_allocationManager);
         }
 
-        require(
-            _eigenLayerMiddleware != address(0),
-            "EigenLayer middleware cannot be zero address"
-        );
-        eigenLayerMiddleware = _eigenLayerMiddleware;
+        if (_eigenLayerMiddleware != address(0)) {
+            eigenLayerMiddleware = _eigenLayerMiddleware;
+        }
     }
 
     // ==============================================================================================
