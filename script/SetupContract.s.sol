@@ -88,8 +88,11 @@ contract SetupContract is Script, Test {
         LinglongSlasher linglongSlasher = LinglongSlasher(
             stdJson.readAddress(output_data, ".taiyiAddresses.linglongSlasher")
         );
-        string memory eigenLayerOutputFile =
-            string(bytes("script/output/devnet/M2_from_scratch_deployment_data.json"));
+        string memory eigenLayerOutputFile = string(
+            bytes(
+                "script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json"
+            )
+        );
 
         string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
         address wethStrategyAddr =

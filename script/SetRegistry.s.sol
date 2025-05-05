@@ -72,6 +72,7 @@ contract SetRegistry is Script, Test {
         uint256 proxyDeployerPrivateKey = vm.parseUint(pkString); // Parse as hex
         uint256 implPrivateKey = vm.parseUint(implPkString); // Parse as hex
         address proxyDeployer = vm.addr(proxyDeployerPrivateKey);
+        address implDeployer = vm.addr(implPrivateKey);
 
         string memory outputFile =
             string(bytes("script/output/devnet/taiyiAddresses.json"));
@@ -85,8 +86,11 @@ contract SetRegistry is Script, Test {
             stdJson.readAddress(output_data, ".taiyiAddresses.eigenLayerMiddleware")
         );
 
-        string memory eigenLayerOutputFile =
-            string(bytes("script/output/devnet/M2_from_scratch_deployment_data.json"));
+        string memory eigenLayerOutputFile = string(
+            bytes(
+                "script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json"
+            )
+        );
 
         string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
         // address wethStrategyAddr =
@@ -97,6 +101,7 @@ contract SetRegistry is Script, Test {
             stdJson.readAddress(eigenLayerOutput_data, ".addresses.permissionController");
 
         AllocationManager allocationManager = AllocationManager(allocationManagerAddr);
+        PermissionController controller = PermissionController(permissionController);
 
         vm.startBroadcast(implPrivateKey);
 
@@ -104,14 +109,27 @@ contract SetRegistry is Script, Test {
         eigenLayerMiddleware.addAdminToPermissionController(
             proxyDeployer, permissionController
         );
+        eigenLayerMiddleware.addAdminToPermissionController(
+            implDeployer, permissionController
+        );
+
         vm.stopBroadcast();
         vm.startBroadcast(proxyDeployerPrivateKey);
-        PermissionController controller = PermissionController(permissionController);
+
         controller.acceptAdmin(address(eigenLayerMiddleware));
 
-        AllocationManager manager = AllocationManager(allocationManager);
-        manager.setAVSRegistrar(
+        controller.setAppointee(
+            address(eigenLayerMiddleware),
+            address(eigenLayerMiddleware),
+            address(allocationManager),
+            allocationManager.createOperatorSets.selector
+        );
+
+        allocationManager.setAVSRegistrar(
             address(eigenLayerMiddleware), IAVSRegistrar(taiyiRegistryCoordinator)
+        );
+        allocationManager.updateAVSMetadataURI(
+            address(eigenLayerMiddleware), "luban-local-test"
         );
         vm.stopBroadcast();
     }

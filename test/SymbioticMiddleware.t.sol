@@ -454,6 +454,8 @@ contract SymbioticMiddlewareTest is POCBaseTest {
             owner, // initialOwner
             0, // initialPausedStatus
             address(eigenLayerDeployer.allocationManager()), // _allocationManager
+            // require eigenlayer Middleware address, not useful in symbiotic so use any address but 0 for test to pass
+            address(eigenLayerDeployer.eigenLayerPauserReg()),
             address(eigenLayerDeployer.eigenLayerPauserReg()) // _pauserRegistry
         );
 

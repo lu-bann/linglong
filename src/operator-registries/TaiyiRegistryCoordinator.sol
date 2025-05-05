@@ -112,6 +112,7 @@ contract TaiyiRegistryCoordinator is
         address initialOwner,
         uint256 initialPausedStatus,
         address _allocationManager,
+        address _eigenLayerMiddleware,
         address /* _pauserRegistry */
     )
         external
@@ -124,6 +125,10 @@ contract TaiyiRegistryCoordinator is
         // Set allocationManager from parameter
         if (_allocationManager != address(0)) {
             allocationManager = IAllocationManager(_allocationManager);
+        }
+
+        if (_eigenLayerMiddleware != address(0)) {
+            eigenLayerMiddleware = _eigenLayerMiddleware;
         }
     }
 

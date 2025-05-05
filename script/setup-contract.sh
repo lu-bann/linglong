@@ -13,10 +13,11 @@ if [ -z "$NETWORK" ]; then
     export NETWORK="devnet"
 fi
 export FOUNDRY_PROFILE=ci
-forge script --rpc-url $EXECUTION_URL \
--vvvv --broadcast ./script/SetupContract.s.sol:SetupContract \
---sig "run()" \
 
 forge script --rpc-url $EXECUTION_URL \
 -vvvv --broadcast ./script/SetRegistry.s.sol:SetRegistry \
---sig "run()" \
+--sig "run()" 
+
+forge script --rpc-url $EXECUTION_URL \
+-vvvv --broadcast ./script/SetupContract.s.sol:SetupContract \
+--sig "run()" 

@@ -364,6 +364,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
             owner, // initialOwner
             0, // initialPausedStatus
             address(eigenLayerDeployer.allocationManager()), // _allocationManager
+            address(middleware),
             address(eigenLayerDeployer.eigenLayerPauserReg()) // _pauserRegistry
         );
 
