@@ -424,7 +424,7 @@ contract Deploy is Script, Test {
     }
 
     function getPrivateKeys()
-        internal
+        public
         returns (uint256 proxyDeployerPrivateKey, uint256 implPrivateKey)
     {
         string memory pkString = vm.envString("PROXY_OWNER_PRIVATE_KEY");
