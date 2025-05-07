@@ -305,7 +305,7 @@ library SlashingLib {
             revert OperatorUnregistered();
         }
 
-        if (registeredAt + registry.getConfig().fraudProofWindow > block.number) {
+        if (registeredAt + registry.getConfig().fraudProofWindow > block.timestamp) {
             revert OperatorFraudProofPeriodNotOver();
         }
     }

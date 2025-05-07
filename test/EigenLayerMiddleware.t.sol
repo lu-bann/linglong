@@ -986,7 +986,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         vm.startPrank(primaryOp);
 
         // Wait for the fraud proof window to pass
-        vm.roll(block.number + 100 days);
+        vm.warp(block.timestamp + 3 hours);
 
         // Call optInToSlasher function with the registration root
         middleware.optInToSlasher(

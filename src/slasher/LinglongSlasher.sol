@@ -212,10 +212,11 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
 
     /// @inheritdoc ISlasher
     function slash(
-        ISlasher.Delegation calldata, /* delegation */
-        ISlasher.Commitment calldata, /* commitment */
-        bytes calldata, /* evidence */
-        address /* challenger */
+        Delegation calldata delegation,
+        Commitment calldata commitment,
+        address committer,
+        bytes calldata evidence,
+        address challenger
     )
         external
         pure
@@ -284,7 +285,6 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         }
     }
 
-    /// @inheritdoc ISlasher
     /// @notice Slash an operator for a given commitment
     /// @dev The URC Registry will call this function to slash a registered operator if supplied with a valid commitment and evidence
     /// @param commitment The commitment message
@@ -296,7 +296,6 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         address /* challenger */
     )
         external
-        override
         onlyInitialized
         onlyURC
         returns (uint256 slashAmountGwei)
