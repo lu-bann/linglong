@@ -54,7 +54,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
     }
 
     function getSlashAmount() external pure returns (uint256) {
-        return 1 ether;
+        return 1e18; // 100 WAD percent
     }
 
     function verifyProof(bytes memory) external pure returns (VerificationStatus) {

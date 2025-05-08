@@ -258,6 +258,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
         vm.stopPrank();
 
+        vm.roll(uint256(eigenLayerDeployer.MIN_WITHDRAWAL_DELAY() + 1000));
         // Perform the slashing via the Registry
         uint256 slashAmount =
             registry.slashCommitment(registrationRoot, commitment, evidence);

@@ -108,7 +108,7 @@ contract EigenlayerDeployer is Operators {
     uint256 REQUIRED_BALANCE_WEI = 32 ether;
     uint64 MAX_PARTIAL_WTIHDRAWAL_AMOUNT_GWEI = 1 ether / 1e9;
     uint64 GOERLI_GENESIS_TIME = 1_616_508_000;
-    uint32 MIN_WITHDRAWAL_DELAY = 86_400;
+    uint32 public MIN_WITHDRAWAL_DELAY = 86_400;
 
     address pauser;
     address unpauser;
