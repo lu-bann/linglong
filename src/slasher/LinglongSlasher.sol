@@ -57,6 +57,16 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
     error SlashingInProgress();
     error NotURC();
 
+    /// @dev Struct to hold slashing parameters
+    struct SlashingParams {
+        bytes32 commitmentHash;
+        bytes32 violationType;
+        address challengerContract;
+        address operator;
+        address middleware;
+        ITaiyiRegistryCoordinator.RestakingProtocol protocol;
+    }
+
     /// @notice Constructor - disabled for upgradeable pattern
     constructor() {
         _disableInitializers();
@@ -210,20 +220,66 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         return challengerImpls[challenger].violationType;
     }
 
+    /// @dev Helper function to validate and prepare slashing parameters
+    function _prepareSlashingParams(
+        Delegation calldata delegation,
+        Commitment calldata commitment,
+        bytes calldata evidence
+    )
+        internal
+        view
+        returns (SlashingParams memory params)
+    {
+        params.commitmentHash = keccak256(abi.encode(commitment, evidence));
+        if (slashedCommitments[params.commitmentHash]) revert AlreadySlashed();
+        if (commitment.slasher != address(this)) revert InvalidSlasher();
+
+        params.violationType = URCCommitmentTypeToViolationType[commitment.commitmentType];
+        params.challengerContract = violationTypeChallengers[params.violationType];
+        params.operator = _extractOperatorFromCommitment(commitment);
+        params.middleware = _findMiddleware(params.operator);
+
+        if (params.middleware == address(0)) {
+            revert OperatorNotInSet(params.operator, 0);
+        }
+
+        params.protocol = ITaiyiRegistryCoordinator(TAIYI_REGISTRY_COORDINATOR)
+            .getMiddlewareProtocol(params.middleware);
+    }
+
     /// @inheritdoc ISlasher
     function slash(
-        ISlasher.Delegation calldata, /* delegation */
-        ISlasher.Commitment calldata, /* commitment */
-        bytes calldata, /* evidence */
-        address /* challenger */
+        Delegation calldata delegation,
+        Commitment calldata commitment,
+        address committer,
+        bytes calldata evidence,
+        address challenger
     )
         external
-        pure
         override
         returns (uint256 /* slashAmountGwei */ )
     {
-        // This method is required by ISlasher but not used
-        revert MethodNotSupported();
+        SlashingParams memory params =
+            _prepareSlashingParams(delegation, commitment, evidence);
+
+        // Execute slashing based on protocol
+        bool executed = _executeSlashingByProtocol(
+            params.operator,
+            params.middleware,
+            params.challengerContract,
+            commitment.payload,
+            params.protocol
+        );
+
+        // If direct execution is requested, execute the slashing
+        if (executed) {
+            slashedCommitments[params.commitmentHash] = true;
+            emit SlashingResult(params.operator, true);
+        }
+
+        // Always return 0 for slashAmountGwei
+        // This is because collateral management is handled by EigenLayer/Symbiotic
+        return 0;
     }
 
     /// @dev Helper function to find middleware for an operator
@@ -282,63 +338,6 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
                 operator, middleware, challengerContract, payload
             );
         }
-    }
-
-    /// @inheritdoc ISlasher
-    /// @notice Slash an operator for a given commitment
-    /// @dev The URC Registry will call this function to slash a registered operator if supplied with a valid commitment and evidence
-    /// @param commitment The commitment message
-    /// @param evidence Arbitrary evidence for the slashing
-    /// @return slashAmountGwei The amount of Gwei slashed (always 0 for Taiyi, as EigenLayer handles actual slashing)
-    function slashFromOptIn(
-        ISlasher.Commitment calldata commitment,
-        bytes calldata evidence,
-        address /* challenger */
-    )
-        external
-        override
-        onlyInitialized
-        onlyURC
-        returns (uint256 slashAmountGwei)
-    {
-        // Prevent double slashing by tracking the commitment hash
-        bytes32 commitmentHash = keccak256(abi.encode(commitment, evidence));
-        if (slashedCommitments[commitmentHash]) revert AlreadySlashed();
-        if (commitment.slasher != address(this)) revert InvalidSlasher();
-
-        // Get violation type and challenger contract
-        bytes32 violationType =
-            URCCommitmentTypeToViolationType[commitment.commitmentType];
-        address challengerContract = violationTypeChallengers[violationType];
-
-        // Extract operator from commitment
-        address operator = _extractOperatorFromCommitment(commitment);
-
-        // Find the middleware address for this operator
-        address middleware = _findMiddleware(operator);
-        if (middleware == address(0)) {
-            revert OperatorNotInSet(operator, 0);
-        }
-
-        // Check which protocol the middleware belongs to
-        ITaiyiRegistryCoordinator.RestakingProtocol protocol = ITaiyiRegistryCoordinator(
-            TAIYI_REGISTRY_COORDINATOR
-        ).getMiddlewareProtocol(middleware);
-
-        // Execute slashing based on protocol
-        bool executed = _executeSlashingByProtocol(
-            operator, middleware, challengerContract, commitment.payload, protocol
-        );
-
-        // If direct execution is requested, execute the slashing
-        if (executed) {
-            slashedCommitments[commitmentHash] = true;
-            emit SlashingResult(operator, true);
-        }
-
-        // Always return 0 for slashAmountGwei
-        // This is because collateral management is handled by EigenLayer/Symbiotic
-        return 0;
     }
 
     /// @dev Extract the operator address from a commitment

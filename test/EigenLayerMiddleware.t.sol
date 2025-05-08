@@ -258,6 +258,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         slasher.setTaiyiRegistryCoordinator(address(registryCoordinator));
         vm.stopPrank();
 
+        vm.roll(uint256(eigenLayerDeployer.MIN_WITHDRAWAL_DELAY() + 1000));
         // Perform the slashing via the Registry
         uint256 slashAmount =
             registry.slashCommitment(registrationRoot, commitment, evidence);
@@ -986,7 +987,7 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         vm.startPrank(primaryOp);
 
         // Wait for the fraud proof window to pass
-        vm.roll(block.number + 100 days);
+        vm.warp(block.timestamp + 3 hours);
 
         // Call optInToSlasher function with the registration root
         middleware.optInToSlasher(

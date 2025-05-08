@@ -238,7 +238,7 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         data[1] = abi.encode("validator-2-metadata");
 
         // Wait for fraud proof window
-        vm.roll(block.number + 100 days);
+        vm.warp(block.timestamp + 3 hours);
 
         // Call middleware's optInToSlasher
         vm.startPrank(operator);

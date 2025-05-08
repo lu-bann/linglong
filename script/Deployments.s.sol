@@ -375,6 +375,7 @@ contract Deploy is Script, Test {
         Registry registry = new Registry(registryConfig);
         emit log_address(address(registry));
         urc = address(registry);
+        vm.serializeAddress(taiyiAddresses, "urc", address(registry));
     }
 
     function setupHoleskyAddresses() internal {
