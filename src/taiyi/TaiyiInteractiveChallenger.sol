@@ -515,7 +515,7 @@ contract TaiyiInteractiveChallenger is
     /// @inheritdoc ILinglongChallenger
     function isSlashingInProgress(
         address operator,
-        uint96 operatorSetId
+        uint32 linglongSubsetId
     )
         external
         view

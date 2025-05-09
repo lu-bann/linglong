@@ -117,10 +117,10 @@ contract SetupContract is Script, Test {
         strategies[0] = IStrategy(wethStrategyAddr);
 
         uint32 validatorOperatorSetId = eigenLayerMiddleware.createOperatorSet(
-            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+            strategies, OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, 0
         );
         uint32 underwriterOperatorSetId = eigenLayerMiddleware.createOperatorSet(
-            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
+            strategies, OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID, 0
         );
 
         OperatorSet memory opSet;

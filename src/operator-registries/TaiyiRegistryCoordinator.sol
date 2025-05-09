@@ -45,9 +45,11 @@ import { IPauserRegistry } from
     "eigenlayer-contracts/src/contracts/interfaces/IPauserRegistry.sol";
 import "forge-std/console.sol";
 
-/// @title A `TaiyiRegistryCoordinator` that has two registries:
-///      1) a `PubkeyRegistry` that keeps track of operators' public keys
-///      2) a `SocketRegistry` that keeps track of operators' sockets (arbitrary strings)
+/// @title TaiyiRegistryCoordinator
+/// @notice A registry coordinator that manages operator registrations for both EigenLayer and Symbiotic protocols
+/// @dev Maintains two registries:
+///      1) PubkeyRegistry: Tracks operators' public keys
+///      2) SocketRegistry: Tracks operators' socket addresses
 contract TaiyiRegistryCoordinator is
     ITaiyiRegistryCoordinator,
     TaiyiRegistryCoordinatorStorage,
@@ -60,10 +62,8 @@ contract TaiyiRegistryCoordinator is
     using BN254 for BN254.G1Point;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
-    using OperatorSubsetLib for OperatorSubsetLib.OperatorSets;
+    using OperatorSubsetLib for OperatorSubsetLib.LinglongSubsets;
     using RestakingProtocolMapLib for RestakingProtocolMapLib.Map;
-    using OperatorSubsetLib for uint96;
-    using OperatorSubsetLib for uint32;
     using SafeCast96To32Lib for uint96;
     using SafeCast96To32Lib for uint32;
     using SafeCast96To32Lib for uint96[];
@@ -73,19 +73,35 @@ contract TaiyiRegistryCoordinator is
     // ================================= MODIFIERS =================================================
     // ==============================================================================================
 
-    /// @notice Modifier that allows only registered middleware contracts to call a function
+    /// @notice Restricts function access to registered restaking middleware contracts
     modifier onlyRestakingMiddleware() {
         require(restakingProtocolMap.contains(msg.sender), OnlyRestakingMiddleware());
         _;
     }
 
-    modifier onlyEigenLayerMiddleware() {
-        require(msg.sender == eigenLayerMiddleware, OnlyEigenlayerMiddleware());
+    modifier onlyMiddleware() {
+        require(
+            msg.sender == eigenLayerMiddleware || msg.sender == symbioticMiddleware,
+            OnlyMiddleware()
+        );
         _;
     }
 
-    modifier onlySymbioticMiddleware() {
-        require(msg.sender == symbioticMiddleware, OnlySymbioticMiddleware());
+    /// @notice Restricts function access to Symbiotic protocol subset IDs
+    modifier onlySymbioticSubsetId(uint32 linglongSubsetId) {
+        require(
+            OperatorSubsetLib.isSymbioticProtocolID(linglongSubsetId),
+            OnlySymbioticSubsetId()
+        );
+        _;
+    }
+
+    /// @notice Restricts function access to EigenLayer protocol subset IDs
+    modifier onlyEigenLayerSubsetId(uint32 linglongSubsetId) {
+        require(
+            OperatorSubsetLib.isEigenlayerProtocolID(linglongSubsetId),
+            OnlyEigenlayerSubsetId()
+        );
         _;
     }
 
@@ -93,6 +109,9 @@ contract TaiyiRegistryCoordinator is
     // ================================= CONSTRUCTOR & INITIALIZER =================================
     // ==============================================================================================
 
+    /// @notice Constructor for the TaiyiRegistryCoordinator
+    /// @param _allocationManager Address of the allocation manager contract
+    /// @param _pauserRegistry Address of the pauser registry contract
     constructor(
         IAllocationManager _allocationManager,
         IPauserRegistry _pauserRegistry,
@@ -104,10 +123,11 @@ contract TaiyiRegistryCoordinator is
         _disableInitializers();
     }
 
-    /// @notice Initialize the contract
-    /// @param initialOwner Address of contract owner
-    /// @param initialPausedStatus Initial paused status
-    /// @param _allocationManager Address of allocation manager
+    /// @notice Initializes the contract with required parameters
+    /// @param initialOwner Address of the contract owner
+    /// @param initialPausedStatus Initial paused status for the contract
+    /// @param _allocationManager Address of the allocation manager contract
+    /// @param _eigenLayerMiddleware Address of the EigenLayer middleware contract
     function initialize(
         address initialOwner,
         uint256 initialPausedStatus,
@@ -122,7 +142,6 @@ contract TaiyiRegistryCoordinator is
         _transferOwnership(initialOwner);
         _setPausedStatus(initialPausedStatus);
 
-        // Set allocationManager from parameter
         if (_allocationManager != address(0)) {
             allocationManager = IAllocationManager(_allocationManager);
         }
@@ -136,11 +155,14 @@ contract TaiyiRegistryCoordinator is
     // ================================= EXTERNAL WRITE FUNCTIONS ==================================
     // ==============================================================================================
 
-    /// @inheritdoc IAVSRegistrar
+    /// @notice Registers an operator for either EigenLayer or Symbiotic protocol
+    /// @param operator Address of the operator to register
+    /// @param linglongSubsetIds Array of subset IDs to register the operator for
+    /// @param data Additional registration data including socket and pubkey information
     function registerOperator(
         address operator,
         address, /*avs*/
-        uint32[] memory operatorSetIds,
+        uint32[] memory linglongSubsetIds,
         bytes calldata data
     )
         external
@@ -148,30 +170,33 @@ contract TaiyiRegistryCoordinator is
         onlyWhenNotPaused(PAUSED_REGISTER_OPERATOR)
     {
         if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
-            _registerOperatorForSymbiotic(operator, operatorSetIds.toUint96Array(), data);
+            _registerOperatorForSymbiotic(operator, linglongSubsetIds);
         } else if (msg.sender == address(allocationManager)) {
-            _registerOperatorForEigenlayer(operator, operatorSetIds, data);
+            _registerOperatorForEigenlayer(operator, linglongSubsetIds, data);
         }
     }
 
-    /// @inheritdoc IAVSRegistrar
+    /// @notice Deregisters an operator from either EigenLayer or Symbiotic protocol
+    /// @param operator Address of the operator to deregister
+    /// @param linglongSubsetIds Array of subset IDs to deregister the operator from
     function deregisterOperator(
         address operator,
         address, /*avs*/
-        uint32[] memory operatorSetIds
+        uint32[] memory linglongSubsetIds
     )
         external
         override(IAVSRegistrar, ITaiyiRegistryCoordinator)
         onlyWhenNotPaused(PAUSED_DEREGISTER_OPERATOR)
     {
         if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
-            _deregisterOperatorForSymbiotic(operator, operatorSetIds.toUint96Array());
+            _deregisterOperatorForSymbiotic(operator);
         } else if (msg.sender == address(allocationManager)) {
-            _deregisterOperatorForEigenlayer(operator, operatorSetIds);
+            _deregisterOperatorForEigenlayer(operator, linglongSubsetIds);
         }
     }
 
-    /// @inheritdoc ITaiyiRegistryCoordinator
+    /// @notice Updates an operator's socket address
+    /// @param socket New socket address for the operator
     function updateSocket(string memory socket) external {
         require(
             _operatorInfo[msg.sender].status == OperatorStatus.REGISTERED, NotRegistered()
@@ -179,53 +204,40 @@ contract TaiyiRegistryCoordinator is
         _setOperatorSocket(_operatorInfo[msg.sender].operatorId, socket);
     }
 
-    /// @dev This function is only callable by the Symbiotic middleware
-    /// @inheritdoc ITaiyiRegistryCoordinator
-    function createSubnetwork(
-        uint96 operatorSetId,
+    /// @notice Creates a new Linglong subset for the Symbiotic protocol
+    /// @param linglongSubsetId ID of the new subset
+    /// @param minStake Minimum stake required for the subset
+    function createLinglongSubset(
+        uint32 linglongSubsetId,
         uint256 minStake
     )
         external
-        onlySymbioticMiddleware
+        onlyMiddleware
     {
-        _operatorSets.createOperatorSet96(operatorSetId, minStake);
-    }
-
-    /// @dev This function is only callable by the Eigenlayer middleware
-    /// @inheritdoc ITaiyiRegistryCoordinator
-    function createOperatorSet(
-        uint32 operatorSetId,
-        uint256 minStake
-    )
-        external
-        onlyEigenLayerMiddleware
-    {
-        _operatorSets.createOperatorSet32(operatorSetId, minStake);
+        _linglongSubsets.createLinglongSubset(linglongSubsetId, minStake);
     }
 
     // ==============================================================================================
     // ================================= OWNER/ADMIN FUNCTIONS =====================================
     // ==============================================================================================
 
-    /// @notice Updates the reference to the socket registry
-    /// @param _socketRegistry The new socket registry address
-    /// @dev This is needed for testing purposes when dealing with proxies
+    /// @notice Updates the socket registry address
+    /// @param _socketRegistry New socket registry address
     function updateSocketRegistry(address _socketRegistry) external onlyOwner {
         require(_socketRegistry != address(0), "Socket registry cannot be zero address");
         socketRegistry = ISocketRegistry(_socketRegistry);
     }
 
-    /// @notice Updates the reference to the pubkey registry
-    /// @param _pubkeyRegistry The new pubkey registry address
-    /// @dev This is needed for testing purposes when dealing with proxies
+    /// @notice Updates the pubkey registry address
+    /// @param _pubkeyRegistry New pubkey registry address
     function updatePubkeyRegistry(address _pubkeyRegistry) external onlyOwner {
         require(_pubkeyRegistry != address(0), "Pubkey registry cannot be zero address");
         pubkeyRegistry = IPubkeyRegistry(_pubkeyRegistry);
     }
 
     /// @notice Sets the protocol type for a middleware address
-    /// @param _restakingMiddleware The middleware address
-    /// @param _restakingProtocol The protocol type (EIGENLAYER or SYMBIOTIC)
+    /// @param _restakingMiddleware Middleware address to set protocol for
+    /// @param _restakingProtocol Protocol type (EIGENLAYER or SYMBIOTIC)
     function setRestakingProtocol(
         address _restakingMiddleware,
         RestakingProtocol _restakingProtocol
@@ -240,7 +252,9 @@ contract TaiyiRegistryCoordinator is
     // ================================= EXTERNAL VIEW FUNCTIONS ===================================
     // ==============================================================================================
 
-    /// @inheritdoc IAVSRegistrar
+    /// @notice Checks if the contract supports a specific AVS
+    /// @param avs Address of the AVS to check
+    /// @return bool True if the AVS is supported
     function supportsAVS(address avs) external view returns (bool) {
         return avs == eigenLayerMiddleware;
     }
@@ -251,27 +265,26 @@ contract TaiyiRegistryCoordinator is
         return restakingProtocolMap.addresses();
     }
 
-    /// @notice Gets all operator sets
-    /// @return Array of operator set IDs
-    function getSymbioticSubnetworks() external view returns (uint96[] memory) {
-        return _operatorSets.getOperatorSets96();
+    /// @notice Gets all Linglong subset IDs
+    /// @return Array of subset IDs
+    function getLinglongSubnets() external view returns (uint32[] memory) {
+        uint256[] memory subnetIds = _linglongSubsets.linglongSubsetIds.values();
+        uint32[] memory subsetIds = new uint32[](subnetIds.length);
+        for (uint256 i = 0; i < subnetIds.length; i++) {
+            subsetIds[i] = uint32(subnetIds[i]);
+        }
+        return subsetIds;
     }
 
-    /// @notice Gets all operator sets
-    /// @return Array of operator set IDs
-    function getEigenLayerOperatorSets() external view returns (uint32[] memory) {
-        return _operatorSets.getOperatorSets32();
-    }
-
-    /// @notice Checks if a middleware is a restaking middleware
-    /// @param middleware The middleware address to check
-    /// @return True if the middleware is a restaking middleware, false otherwise
+    /// @notice Checks if an address is a registered middleware
+    /// @param middleware Address to check
+    /// @return bool True if the address is a registered middleware
     function isRestakingMiddleware(address middleware) external view returns (bool) {
         return restakingProtocolMap.contains(middleware);
     }
 
     /// @notice Gets all middleware addresses for a specific protocol
-    /// @param protocol The protocol type to filter by
+    /// @param protocol Protocol type to filter by
     /// @return Array of middleware addresses for the specified protocol
     function getRestakingMiddlewareByProtocol(RestakingProtocol protocol)
         external
@@ -282,8 +295,8 @@ contract TaiyiRegistryCoordinator is
     }
 
     /// @notice Gets the protocol type for a middleware address
-    /// @param middleware The middleware address to query
-    /// @return The protocol type associated with the middleware
+    /// @param middleware Middleware address to query
+    /// @return Protocol type associated with the middleware
     function getMiddlewareProtocol(address middleware)
         external
         view
@@ -292,92 +305,34 @@ contract TaiyiRegistryCoordinator is
         return restakingProtocolMap.get(middleware);
     }
 
-    /// @notice Gets an operator from an operator set by address
-    /// @param baseOperatorSetId The base operator set ID
-    /// @param operator The operator address
-    /// @return True if the operator is in the set, false otherwise
-    function getEigenLayerOperatorFromOperatorSet(
-        uint32 baseOperatorSetId,
+    /// @notice Checks if an operator is in a specific Linglong subset
+    /// @param linglongSubsetId ID of the subset to check
+    /// @param operator Address of the operator to check
+    /// @return bool True if the operator is in the subset
+    function isOperatorInLinglongSubset(
+        uint32 linglongSubsetId,
         address operator
     )
         external
         view
         returns (bool)
     {
-        return _operatorSets.isOperatorInSet32(
-            baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER),
-            operator
-        );
+        return _linglongSubsets.isOperatorInLinglongSubset(linglongSubsetId, operator);
     }
 
-    /// @notice Gets an operator from a subnetwork by address
-    /// @param baseSubnetworkId The base subnetwork ID
-    /// @param operator The operator address
-    /// @return True if the operator is in the set, false otherwise
-    function getSymbioticOperatorFromOperatorSet(
-        uint96 baseSubnetworkId,
-        address operator
-    )
+    /// @notice Checks if a Linglong subset exists
+    /// @param linglongSubsetId ID of the subset to check
+    /// @return bool True if the subset exists
+    function isLinglongSubsetExist(uint32 linglongSubsetId)
         external
         view
         returns (bool)
     {
-        return _operatorSets.isOperatorInSet96(
-            baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC), operator
-        );
+        return _linglongSubsets.linglongSubsetIds.contains(linglongSubsetId);
     }
 
-    function isEigenlayerOperatorSetExist(uint32 operatorSetId)
-        external
-        view
-        returns (bool)
-    {
-        return _operatorSets.operatorSetIds32.contains(operatorSetId);
-    }
-
-    function isSymbioticOperatorSetExist(uint96 operatorSetId)
-        external
-        view
-        returns (bool)
-    {
-        return _operatorSets.operatorSetIds96.contains(operatorSetId);
-    }
-    /// @notice Checks if an operator is in a specific operator set
-    /// @param baseOperatorSetId The base operator set ID
-    /// @param operator The operator address
-    /// @return True if the operator is in the set, false otherwise
-
-    function isEigenLayerOperatorInSet(
-        uint32 baseOperatorSetId,
-        address operator
-    )
-        external
-        view
-        returns (bool)
-    {
-        return _operatorSets.isOperatorInSet32(
-            baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER),
-            operator
-        );
-    }
-
-    /// @notice Checks if an operator is in a specific symbiotic operator set
-    /// @param baseSubnetworkId The base subnetwork ID
-    /// @param operator The operator address
-    /// @return True if the operator is in the set, false otherwise
-    function isSymbioticOperatorInSubnetwork(
-        uint96 baseSubnetworkId,
-        address operator
-    )
-        external
-        view
-        returns (bool)
-    {
-        return _operatorSets.isOperatorInSet96(
-            baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC), operator
-        );
-    }
-
+    /// @notice Gets the count of operator sets
+    /// @return uint32 Number of operator sets
     function getOperatorSetCount() external view returns (uint32) {
         if (restakingProtocolMap.get(msg.sender) == RestakingProtocol.SYMBIOTIC) {
             return uint32(
@@ -388,61 +343,32 @@ contract TaiyiRegistryCoordinator is
         }
     }
 
-    /// @notice Gets the operators in a specific eigenlayer operator set
-    /// @param baseOperatorSetId The base operator set ID
-    /// @return The operator set
-    function getEigenLayerOperatorSetOperators(uint32 baseOperatorSetId)
+    /// @notice Gets all operators in a specific Linglong subset
+    /// @param linglongSubsetId ID of the subset to query
+    /// @return Array of operator addresses in the subset
+    function getLinglongSubsetOperators(uint32 linglongSubsetId)
         external
         view
         returns (address[] memory)
     {
-        return _operatorSets.getOperatorsInSet32(
-            baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER)
-        );
+        return _linglongSubsets.getOperatorsInLinglongSubset(linglongSubsetId);
     }
 
-    /// @notice Gets the operators in a specific symbiotic subnetwork
-    /// @param baseSubnetworkId The base subnetwork ID
-    /// @return The operator set
-    function getSymbioticSubnetworkOperators(uint96 baseSubnetworkId)
-        external
-        view
-        returns (address[] memory)
-    {
-        return _operatorSets.getOperatorsInSet96(
-            baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC)
-        );
-    }
-
-    /// @notice Gets the size of a specific eigenlayer operator set
-    /// @param baseOperatorSetId The base operator set ID
-    /// @return The size of the operator set
-    function getEigenLayerOperatorSetSize(uint32 baseOperatorSetId)
+    /// @notice Gets the size of a specific Linglong subset
+    /// @param linglongSubsetId ID of the subset to query
+    /// @return uint256 Number of operators in the subset
+    function getLinglongSubsetSize(uint32 linglongSubsetId)
         external
         view
         returns (uint256)
     {
-        return _operatorSets.getOperatorSetLength32(
-            baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER)
-        );
+        return _linglongSubsets.getOperatorsInLinglongSubset(linglongSubsetId).length;
     }
 
-    /// @notice Gets the size of a specific symbiotic subnetwork
-    /// @param baseSubnetworkId The base subnetwork ID
-    /// @return The size of the subnetwork
-    function getSymbioticSubnetworkSize(uint96 baseSubnetworkId)
-        external
-        view
-        returns (uint256)
-    {
-        return _operatorSets.getOperatorSetLength96(
-            baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC)
-        );
-    }
-
-    /// @notice Returns all operator sets that an operator has allocated magnitude to
-    /// @param operator The operator whose allocated sets to fetch
-    /// @return sets The allocated operator sets
+    /// @notice Gets all operator sets that an operator has allocated magnitude to
+    /// @param operator Address of the operator to query
+    /// @param protocol Protocol type to filter by
+    /// @return sets Allocated operator sets for the operator
     function getOperatorAllocatedOperatorSets(
         address operator,
         RestakingProtocol protocol
@@ -452,22 +378,18 @@ contract TaiyiRegistryCoordinator is
         returns (AllocatedOperatorSets memory sets)
     {
         if (protocol == RestakingProtocol.SYMBIOTIC) {
-            // Get Symbiotic subnetwork (uint96)
             uint96[] memory symbioticSubnetworkIds = ISymbioticNetworkMiddleware(
                 symbioticMiddleware
             ).getOperatorAllocatedSubnetworks(operator);
 
-            // Initialize the symbioticSets array
             sets.symbioticSets = new uint96[](symbioticSubnetworkIds.length);
             for (uint256 i = 0; i < symbioticSubnetworkIds.length; i++) {
                 sets.symbioticSets[i] = symbioticSubnetworkIds[i];
             }
         } else if (protocol == RestakingProtocol.EIGENLAYER) {
-            // Get EigenLayer operator sets (uint32)
             OperatorSet[] memory eigenLayerSets =
                 allocationManager.getAllocatedSets(operator);
 
-            // Initialize the eigenLayerSets array
             sets.eigenLayerSets = new uint32[](eigenLayerSets.length);
             for (uint256 i = 0; i < eigenLayerSets.length; i++) {
                 sets.eigenLayerSets[i] = eigenLayerSets[i].id;
@@ -477,21 +399,21 @@ contract TaiyiRegistryCoordinator is
         return sets;
     }
 
-    /// @notice Returns all strategies that an operator has allocated magnitude to in a specific operator set
-    /// @param operator The operator whose allocated strategies to fetch
-    /// @param baseOperatorSetId The ID of the operator set to query
+    /// @notice Gets all strategies that an operator has allocated magnitude to in a specific EigenLayer subset
+    /// @param operator Address of the operator to query
+    /// @param linglongSubsetId ID of the subset to query
+    /// @return Array of strategy addresses
     function getEigenLayerOperatorAllocatedStrategies(
         address operator,
-        uint32 baseOperatorSetId
+        uint32 linglongSubsetId
     )
         external
         view
+        onlyEigenLayerSubsetId(linglongSubsetId)
         returns (address[] memory)
     {
-        OperatorSet memory operatorSet = OperatorSet({
-            avs: msg.sender,
-            id: baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER)
-        });
+        OperatorSet memory operatorSet =
+            OperatorSet({ avs: eigenLayerMiddleware, id: linglongSubsetId });
         IStrategy[] memory strategies =
             allocationManager.getAllocatedStrategies(operator, operatorSet);
         address[] memory allocatedStrategies = new address[](strategies.length);
@@ -501,48 +423,50 @@ contract TaiyiRegistryCoordinator is
         return allocatedStrategies;
     }
 
-    /// @notice Returns all strategies that an operator has allocated magnitude to in a specific symbiotic subnetwork
-    /// @param operator The operator whose allocated strategies to fetch
-    /// @param baseSubnetworkId The ID of the subnetwork to query
+    /// @notice Gets all strategies that an operator has allocated magnitude to in a specific Symbiotic subset
+    /// @param operator Address of the operator to query
+    /// @param linglongSubsetId ID of the subset to query
+    /// @return allocatedStrategies of strategy addresses
     function getSymbioticOperatorAllocatedStrategies(
         address operator,
-        uint96 baseSubnetworkId
+        uint32 linglongSubsetId
     )
         external
         view
+        onlySymbioticSubsetId(linglongSubsetId)
         returns (address[] memory allocatedStrategies)
     {
         (, allocatedStrategies,) = ISymbioticNetworkMiddleware(symbioticMiddleware)
-            .getOperatorCollaterals(
-            operator, baseSubnetworkId.encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC)
-        );
+            .getOperatorCollaterals(operator, linglongSubsetId);
     }
 
+    /// @notice Gets the amount of a specific strategy allocated by an operator in a Symbiotic subset
+    /// @param operator Address of the operator to query
+    /// @param linglongSubsetId ID of the subset to query
+    /// @param strategy Strategy to query allocation for
+    /// @return uint256 Amount of the strategy allocated
     function getSymbioticOperatorAllocatedStrategiesAmount(
         address operator,
-        uint96 baseSubnetworkId,
+        uint32 linglongSubsetId,
         IStrategy strategy
     )
         external
+        onlySymbioticSubsetId(linglongSubsetId)
         returns (uint256)
     {
-        // 1. Get the operator's collaterals for this subnetwork
         (
             address[] memory vaults,
             address[] memory collateralTokens,
             uint256[] memory stakedAmounts
         ) = ISymbioticNetworkMiddleware(symbioticMiddleware).getOperatorCollaterals(
-            operator, baseSubnetworkId
+            operator, linglongSubsetId
         );
 
-        // 2. Find the matching strategy and return its allocation
         address strategyAddress = address(strategy);
 
-        // Check if operator has any vaults/collaterals
         if (collateralTokens.length == 0) {
-            // Operator has no registered collaterals in this subnetwork
             emit OperatorAllocationQuery(
-                operator, baseSubnetworkId, address(strategy), 0, "No collaterals found"
+                operator, linglongSubsetId, address(strategy), 0, "No collaterals found"
             );
             return 0;
         }
@@ -550,20 +474,18 @@ contract TaiyiRegistryCoordinator is
         for (uint256 i = 0; i < collateralTokens.length; i++) {
             if (collateralTokens[i] == strategyAddress) {
                 if (stakedAmounts[i] > 0) {
-                    // Found a matching strategy with allocation
                     emit OperatorAllocationQuery(
                         operator,
-                        baseSubnetworkId,
+                        linglongSubsetId,
                         address(strategy),
                         stakedAmounts[i],
                         "Allocation found"
                     );
                     return stakedAmounts[i];
                 } else {
-                    // Strategy exists but has zero allocation
                     emit OperatorAllocationQuery(
                         operator,
-                        baseSubnetworkId,
+                        linglongSubsetId,
                         address(strategy),
                         0,
                         "Zero allocation"
@@ -573,33 +495,34 @@ contract TaiyiRegistryCoordinator is
             }
         }
 
-        // Strategy not found among operator's collaterals
         emit OperatorAllocationQuery(
-            operator, baseSubnetworkId, address(strategy), 0, "Strategy not found"
+            operator, linglongSubsetId, address(strategy), 0, "Strategy not found"
         );
         return 0;
     }
 
-    /// @dev Returns 0 if the operator has no allocation for this strategy
+    /// @notice Gets the amount of a specific strategy allocated by an operator in an EigenLayer subset
+    /// @param operator Address of the operator to query
+    /// @param linglongSubsetId ID of the subset to query
+    /// @param strategy Strategy to query allocation for
+    /// @return uint256 Amount of the strategy allocated
     function getEigenLayerOperatorAllocatedStrategiesAmount(
         address operator,
-        uint32 baseOperatorSetId,
+        uint32 linglongSubsetId,
         IStrategy strategy
     )
         external
+        onlyEigenLayerSubsetId(linglongSubsetId)
         returns (uint256)
     {
-        OperatorSet memory operatorSet = OperatorSet({
-            avs: msg.sender,
-            id: baseOperatorSetId.encodeOperatorSetId32(RestakingProtocol.EIGENLAYER)
-        });
+        OperatorSet memory operatorSet =
+            OperatorSet({ avs: eigenLayerMiddleware, id: linglongSubsetId });
         IAllocationManagerTypes.Allocation memory allocation =
             allocationManager.getAllocation(operator, operatorSet, strategy);
 
-        // Log the query result
         emit OperatorAllocationQuery(
             operator,
-            baseOperatorSetId,
+            linglongSubsetId,
             address(strategy),
             allocation.currentMagnitude,
             allocation.effectBlock >= block.number
@@ -610,25 +533,34 @@ contract TaiyiRegistryCoordinator is
         return allocation.currentMagnitude;
     }
 
-    /// ========================================================================================
-    /// ============== EIGENLAYER OUT-PROTOCOL OPERATOR VIEW FUNCTIONS =========================
-    /// ========================================================================================
+    // ==============================================================================================
+    // ================================= OPERATOR VIEW FUNCTIONS ===================================
+    // ==============================================================================================
 
+    /// @notice Gets information about an operator
+    /// @param operator Address of the operator to query
+    /// @return OperatorInfo Information about the operator
     function getOperator(address operator) external view returns (OperatorInfo memory) {
         return _operatorInfo[operator];
     }
 
-    /// @notice Returns the operatorId for the given `operator`
+    /// @notice Gets the operator ID for an operator address
+    /// @param operator Address of the operator to query
+    /// @return bytes32 Operator ID
     function getOperatorId(address operator) external view returns (bytes32) {
         return _operatorInfo[operator].operatorId;
     }
 
-    /// @notice Returns the operator address for the given `operatorId`
+    /// @notice Gets the operator address for an operator ID
+    /// @param operatorId ID of the operator to query
+    /// @return address Operator address
     function getOperatorFromId(bytes32 operatorId) external view returns (address) {
         return pubkeyRegistry.getOperatorFromId(operatorId);
     }
 
-    /// @notice Returns the status for the given `operator`
+    /// @notice Gets the status of an operator
+    /// @param operator Address of the operator to query
+    /// @return OperatorStatus Status of the operator
     function getOperatorStatus(address operator)
         external
         view
@@ -637,8 +569,9 @@ contract TaiyiRegistryCoordinator is
         return _operatorInfo[operator].status;
     }
 
-    /// @notice Returns the message hash that an operator must sign to register their BLS public key.
-    /// @param operator is the address of the operator registering their BLS public key
+    /// @notice Gets the message hash for pubkey registration
+    /// @param operator Address of the operator registering their pubkey
+    /// @return BN254.G1Point Message hash for pubkey registration
     function pubkeyRegistrationMessageHash(address operator)
         public
         view
@@ -647,8 +580,9 @@ contract TaiyiRegistryCoordinator is
         return BN254.hashToG1(calculatePubkeyRegistrationMessageHash(operator));
     }
 
-    /// @notice Returns the message hash that an operator must sign to register their BLS public key.
-    /// @param operator is the address of the operator registering their BLS public key
+    /// @notice Calculates the message hash for pubkey registration
+    /// @param operator Address of the operator registering their pubkey
+    /// @return bytes32 Message hash for pubkey registration
     function calculatePubkeyRegistrationMessageHash(address operator)
         public
         pure
@@ -657,12 +591,10 @@ contract TaiyiRegistryCoordinator is
         return keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator));
     }
 
-    /**
-     * @notice External function to decode operator data
-     * @param data The data to decode
-     * @return socket The socket string
-     * @return params The PubkeyRegistrationParams
-     */
+    /// @notice Decodes operator registration data
+    /// @param data Data to decode
+    /// @return socket Socket address
+    /// @return params Pubkey registration parameters
     function decodeOperatorData(bytes calldata data)
         external
         pure
@@ -678,6 +610,9 @@ contract TaiyiRegistryCoordinator is
     // ================================= INTERNAL FUNCTIONS ========================================
     // ==============================================================================================
 
+    /// @notice Sets the protocol type for a middleware address
+    /// @param _restakingMiddleware Middleware address to set protocol for
+    /// @param _restakingProtocol Protocol type to set
     function _setRestakingProtocol(
         address _restakingMiddleware,
         RestakingProtocol _restakingProtocol
@@ -690,7 +625,6 @@ contract TaiyiRegistryCoordinator is
         );
         restakingProtocolMap.set(_restakingMiddleware, _restakingProtocol);
 
-        // Update the specific middleware references for easier access
         if (_restakingProtocol == RestakingProtocol.SYMBIOTIC) {
             symbioticMiddleware = _restakingMiddleware;
         } else if (_restakingProtocol == RestakingProtocol.EIGENLAYER) {
@@ -700,12 +634,10 @@ contract TaiyiRegistryCoordinator is
         emit RestakingMiddlewareUpdated(_restakingProtocol, _restakingMiddleware);
     }
 
-    /// @notice Fetches an operator's pubkey hash from the PubkeyRegistry. If the
-    /// operator has not registered a pubkey, attempts to register a pubkey using
-    /// `params`
-    /// @param operator the operator whose pubkey to query from the PubkeyRegistry
-    /// @param params contains the G1 & G2 public keys of the operator, and a signature proving their ownership
-    /// @dev `params` can be empty if the operator has already registered a pubkey in the PubkeyRegistry
+    /// @notice Gets or creates an operator ID
+    /// @param operator Address of the operator
+    /// @param params Pubkey registration parameters
+    /// @return operatorId Operator ID
     function _getOrCreateOperatorId(
         address operator,
         IPubkeyRegistry.PubkeyRegistrationParams memory params
@@ -716,10 +648,9 @@ contract TaiyiRegistryCoordinator is
         return pubkeyRegistry.getOrRegisterOperatorId(operator, params);
     }
 
-    /// @notice Updates an operator's socket address in the SocketRegistry
-    /// @param operatorId The unique identifier of the operator
-    /// @param socket The new socket address to set for the operator
-    /// @dev Emits an OperatorSocketUpdate event after updating
+    /// @notice Sets an operator's socket address
+    /// @param operatorId ID of the operator
+    /// @param socket New socket address
     function _setOperatorSocket(bytes32 operatorId, string memory socket) internal {
         socketRegistry.setOperatorSocket(operatorId, socket);
         emit OperatorSocketUpdate(operatorId, socket);
@@ -729,9 +660,13 @@ contract TaiyiRegistryCoordinator is
     // ================================= PROTOCOL-SPECIFIC FUNCTIONS ===============================
     // ==============================================================================================
 
+    /// @notice Registers an operator for the EigenLayer protocol
+    /// @param operator Address of the operator to register
+    /// @param _linglongSubsetIds Array of subset IDs to register for
+    /// @param data Additional registration data
     function _registerOperatorForEigenlayer(
         address operator,
-        uint32[] memory operatorSetIds,
+        uint32[] memory _linglongSubsetIds,
         bytes calldata data
     )
         internal
@@ -752,22 +687,17 @@ contract TaiyiRegistryCoordinator is
                 ISignatureUtilsMixinTypes.SignatureWithSaltAndExpiry
             )
         );
-
-        /// If the operator has NEVER registered a pubkey before, use `params` to register
-        /// their pubkey in pubkeyRegistry
-        ///
-        /// If the operator HAS registered a pubkey, `params` is ignored and the pubkey hash
-        /// (operatorId) is fetched instead
         bytes32 operatorId = _getOrCreateOperatorId(operator, params);
-        _setOperatorSocket(operatorId, socket);
-
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
         _operatorInfo[operator].operatorId = operatorId;
 
-        uint256[] memory stakes = _checkInitialEigenStake(operator, operatorSetIds);
-        uint256 aggregateStake;
+        uint256[] memory stakes = _checkInitialEigenStake(operator, _linglongSubsetIds);
         for (uint256 i = 0; i < stakes.length; ++i) {
-            uint256 minStake = _operatorSets.getMinStake32(operatorSetIds[i]);
+            require(
+                OperatorSubsetLib.isEigenlayerProtocolID(_linglongSubsetIds[i]),
+                "Invalid eigenlayer subset ID"
+            );
+            uint256 minStake = _linglongSubsets.getMinStake(_linglongSubsetIds[i]);
             require(stakes[i] >= minStake, "Stake below set minimum");
         }
 
@@ -777,15 +707,15 @@ contract TaiyiRegistryCoordinator is
             );
         }
 
-        // Use the library function to add operator to sets
-        _operatorSets.addOperatorToSets32(
-            operatorSetIds, RestakingProtocol.EIGENLAYER, operator
-        );
+        _linglongSubsets.addOperatorToLinglongSubsets(_linglongSubsetIds, operator);
     }
 
+    /// @notice Deregisters an operator from the EigenLayer protocol
+    /// @param operator Address of the operator to deregister
+    /// @param _linglongSubsetIds Array of subset IDs to deregister from
     function _deregisterOperatorForEigenlayer(
         address operator,
-        uint32[] memory operatorSetIds
+        uint32[] memory _linglongSubsetIds
     )
         internal
     {
@@ -793,25 +723,22 @@ contract TaiyiRegistryCoordinator is
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
         operatorInfo.status = OperatorStatus.DEREGISTERED;
-        uint32[] memory baseOperatorSetIds = new uint32[](operatorSetIds.length);
-        for (uint256 i = 0; i < operatorSetIds.length; i++) {
-            (, uint32 baseId) = operatorSetIds[i].decodeOperatorSetId32();
-            baseOperatorSetIds[i] = baseId;
+        for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
+            require(
+                OperatorSubsetLib.isEigenlayerProtocolID(_linglongSubsetIds[i]),
+                "Invalid eigenlayer subset ID"
+            );
         }
 
-        _operatorSets.removeOperatorFromSets32(
-            baseOperatorSetIds, RestakingProtocol.EIGENLAYER, operator
-        );
+        _linglongSubsets.removeOperatorFromLinglongSubsets(_linglongSubsetIds, operator);
     }
 
-    /// @notice Register an operator for the Symbiotic protocol
-    /// @dev Handles mapping of base subnetwork ID to appropriate operator set IDs
-    /// @param operator The operator to register
-    /// @param baseSubnetworkIds The base subnetwork ID (will be mapped to operator sets)
+    /// @notice Registers an operator for the Symbiotic protocol
+    /// @param operator Address of the operator to register
+    /// @param linglongSubsetIds Array of subset IDs to register for
     function _registerOperatorForSymbiotic(
         address operator,
-        uint96[] memory baseSubnetworkIds,
-        bytes calldata /*data*/
+        uint32[] memory linglongSubsetIds
     )
         internal
     {
@@ -821,62 +748,52 @@ contract TaiyiRegistryCoordinator is
         );
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
-
-        uint96[] memory operatorSetIds = new uint96[](baseSubnetworkIds.length);
-        for (uint256 i = 0; i < baseSubnetworkIds.length; i++) {
-            operatorSetIds[i] =
-                baseSubnetworkIds[i].encodeOperatorSetId96(RestakingProtocol.SYMBIOTIC);
+        for (uint256 i = 0; i < linglongSubsetIds.length; i++) {
+            require(
+                OperatorSubsetLib.isSymbioticProtocolID(linglongSubsetIds[i]),
+                "Invalid symbiotic subset ID"
+            );
         }
 
-        _operatorSets.addOperatorToSets96(
-            operatorSetIds, RestakingProtocol.SYMBIOTIC, operator
-        );
+        _linglongSubsets.addOperatorToLinglongSubsets(linglongSubsetIds, operator);
     }
 
-    /// @notice Deregister an operator from the Symbiotic protocol
-    /// @dev Handles mapping of subnetwork ID to appropriate operator set IDs for deregistration
-    /// @param operator The operator to deregister
-    /// @param subnetworkIds The subnetwork IDs (will be mapped to operator sets)
-    function _deregisterOperatorForSymbiotic(
-        address operator,
-        uint96[] memory subnetworkIds
-    )
-        internal
-    {
+    /// @notice Deregisters an operator from the Symbiotic protocol
+    /// @param operator Address of the operator to deregister
+    function _deregisterOperatorForSymbiotic(address operator) internal {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
         operatorInfo.status = OperatorStatus.DEREGISTERED;
 
-        // Use the library function to remove operator from sets
-        _operatorSets.removeOperatorFromSets96(
-            subnetworkIds, RestakingProtocol.SYMBIOTIC, operator
-        );
+        uint32[] memory linglongSubsetIds = new uint32[](2);
+        linglongSubsetIds[0] = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
+        linglongSubsetIds[1] = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
+
+        _linglongSubsets.removeOperatorFromLinglongSubsets(linglongSubsetIds, operator);
     }
 
     /// @notice Checks the initial EigenLayer stake for an operator
-    /// @param operator The operator to check
-    /// @param operatorSetIds The operator sets to check
-    /// @return stakesPerSet Array of stake amounts per operatorSetId
+    /// @param operator Address of the operator to check
+    /// @param _linglongSubsetIds Array of subset IDs to check
+    /// @return stakesPerSet Array of stake amounts per subset
     function _checkInitialEigenStake(
         address operator,
-        uint32[] memory operatorSetIds
+        uint32[] memory _linglongSubsetIds
     )
         internal
         view
         returns (uint256[] memory stakesPerSet)
     {
-        stakesPerSet = new uint256[](operatorSetIds.length);
+        stakesPerSet = new uint256[](_linglongSubsetIds.length);
 
-        // Access DelegationManager through AllocationManager's immutable variable
         IDelegationManager deleg =
             AllocationManager(address(allocationManager)).delegation();
 
-        // Loop over each operator set we're registering for
-        for (uint256 k = 0; k < operatorSetIds.length; ++k) {
-            uint32 encodedSetId = operatorSetIds[k];
+        for (uint256 k = 0; k < _linglongSubsetIds.length; ++k) {
+            uint32 subsetId = _linglongSubsetIds[k];
             OperatorSet memory opSet =
-                OperatorSet({ avs: eigenLayerMiddleware, id: encodedSetId });
+                OperatorSet({ avs: eigenLayerMiddleware, id: subsetId });
 
             IStrategy[] memory strategies =
                 allocationManager.getAllocatedStrategies(operator, opSet);
@@ -894,7 +811,7 @@ contract TaiyiRegistryCoordinator is
                 if (alloc.currentMagnitude == 0) continue;
 
                 uint64 maxMag = allocationManager.getMaxMagnitude(operator, strategies[i]);
-                if (maxMag == 0) continue; // avoid div-by-zero, also implies no stake
+                if (maxMag == 0) continue;
 
                 uint256 stakePortion =
                     (shares[i] * uint256(alloc.currentMagnitude)) / uint256(maxMag);

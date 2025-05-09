@@ -3,8 +3,11 @@ pragma solidity ^0.8.27;
 
 import { BN254 } from "../libs/BN254.sol";
 
+import { IPubkeyRegistry } from "./IPubkeyRegistry.sol";
 import { IAllocationManagerTypes } from
     "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import { ISignatureUtilsMixinTypes } from
+    "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 import { IStrategy } from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import { OperatorSet } from
     "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
@@ -51,19 +54,6 @@ interface ITaiyiRegistryCoordinator {
         SYMBIOTIC
     }
 
-    /// @notice Defines the type of restaking service used by the protocol
-    /// @dev Used to specify which restaking mechanism an operator is using
-    /// @custom:enum EIGENLAYER_VALIDATOR The operator is using EigenLayer for restaking
-    /// @custom:enum EIGENLAYER_UNDERWRITER The operator is using EigenLayer for restaking
-    /// @custom:enum SYMBIOTIC_VALIDATOR The operator is using Symbiotic for restaking
-    /// @custom:enum SYMBIOTIC_UNDERWRITER The operator is using Symbiotic for restaking
-    enum RestakingServiceTypes {
-        EIGENLAYER_VALIDATOR,
-        EIGENLAYER_UNDERWRITER,
-        SYMBIOTIC_VALIDATOR,
-        SYMBIOTIC_UNDERWRITER
-    }
-
     /// @notice Error thrown when an operator is not registered
     error NotRegistered();
 
@@ -85,11 +75,8 @@ interface ITaiyiRegistryCoordinator {
     /// @notice Error thrown when a caller is not the restaking middleware
     error OnlyRestakingMiddleware();
 
-    /// @notice Error thrown when a caller is not the EigenLayer middleware
-    error OnlyEigenlayerMiddleware();
-
-    /// @notice Error thrown when a caller is not the symbiotic middleware
-    error OnlySymbioticMiddleware();
+    /// @notice Error thrown when a caller is not the middleware
+    error OnlyMiddleware();
 
     /// @notice Error thrown when an operator is not registered
     error OperatorNotDeregistered();
@@ -99,6 +86,12 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Error thrown when an operator set is not found
     error OperatorSetNotFound(uint32 operatorSetId);
+
+    /// @notice Error thrown when an invalid subset ID is provided
+    error OnlySymbioticSubsetId();
+
+    /// @notice Error thrown when an invalid subset ID is provided
+    error OnlyEigenlayerSubsetId();
 
     /// @notice Emitted when a new middleware is added or updated
     event RestakingMiddlewareUpdated(
@@ -124,24 +117,13 @@ interface ITaiyiRegistryCoordinator {
     /// @param socket The new socket value
     event OperatorSocketUpdate(bytes32 indexed operatorId, string socket);
 
-    /// @notice Emitted when the ejector address is updated
-    /// @param previousEjector The previous ejector address
-    /// @param newEjector The new ejector address
-    event EjectorUpdated(address indexed previousEjector, address indexed newEjector);
-
-    /// @notice Emitted when the restaking middleware address is updated
-    /// @param previousMiddleware The previous middleware address
-    /// @param newMiddleware The new middleware address
-    event RestakingMiddlewareUpdated(
-        address indexed previousMiddleware, address indexed newMiddleware
-    );
-
     /// @notice Updates the socket address for the calling operator
     /// @param socket The new socket address to set
     function updateSocket(string memory socket) external;
 
     /// @notice Register an operator with the specified operator set IDs
     /// @param operator The address of the operator to register
+    /// @param avs The AVS address
     /// @param operatorSetIds The operator set IDs to register the operator with
     /// @param data Additional data required for registration
     function registerOperator(
@@ -154,6 +136,7 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Deregister an operator from the specified operator set IDs
     /// @param operator The address of the operator to deregister
+    /// @param avs The AVS address
     /// @param operatorSetIds The operator set IDs to deregister the operator from
     function deregisterOperator(
         address operator,
@@ -163,14 +146,9 @@ interface ITaiyiRegistryCoordinator {
         external;
 
     /// @notice Create a new operator set with the specified strategies
-    /// @param subnetworkId The ID of the subnetwork
-    /// @param minStake The minimum stake required for the subnetwork
-    function createSubnetwork(uint96 subnetworkId, uint256 minStake) external;
-
-    /// @notice Create a new operator set with the specified strategies
-    /// @param operatorSetId The ID of the operator set
+    /// @param linglongSubsetId The ID of the operator set
     /// @param minStake The minimum stake required for the operator set
-    function createOperatorSet(uint32 operatorSetId, uint256 minStake) external;
+    function createLinglongSubset(uint32 linglongSubsetId, uint256 minStake) external;
 
     /// @notice Gets the protocol type for a middleware address
     /// @param middleware The middleware address to query
@@ -185,53 +163,33 @@ interface ITaiyiRegistryCoordinator {
     /// @return True if the middleware is a restaking middleware, false otherwise
     function isRestakingMiddleware(address middleware) external view returns (bool);
 
-    /// @notice Get the operators in the specified subnetwork
-    /// @param baseSubnetworkId The ID of the subnetwork
-    /// @return Array of operator addresses in the subnetwork
-    function getSymbioticSubnetworkOperators(uint96 baseSubnetworkId)
-        external
-        view
-        returns (address[] memory);
-
     /// @notice Get the operators in the specified operator set
-    /// @param baseOperatorSetId The ID of the operator set
+    /// @param linglongSubsetId The ID of the operator set
     /// @return Array of operator addresses in the set
-    function getEigenLayerOperatorSetOperators(uint32 baseOperatorSetId)
+    function getLinglongSubsetOperators(uint32 linglongSubsetId)
         external
         view
         returns (address[] memory);
 
-    /// @notice Get all symbiotic operator sets
-    /// @return Array of operator set IDs
-    function getSymbioticSubnetworks() external view returns (uint96[] memory);
-
-    /// @notice Get all eigenlayer operator sets
-    /// @return Array of operator set IDs
-    function getEigenLayerOperatorSets() external view returns (uint32[] memory);
-
-    /// @notice Get the operator set with the specified ID
-    /// @param operatorSetId The ID of the operator set
-    /// @param operator The address of the operator
-    /// @return Array of operator addresses in the set
-    function getEigenLayerOperatorFromOperatorSet(
-        uint32 operatorSetId,
-        address operator
-    )
+    /// @notice Get the size of a specific operator set
+    /// @param linglongSubsetId The ID of the operator set
+    /// @return The size of the operator set
+    function getLinglongSubsetSize(uint32 linglongSubsetId)
         external
         view
-        returns (bool);
+        returns (uint256);
 
-    /// @notice Get the operator set with the specified ID
-    /// @param operatorSetId The ID of the operator set
-    /// @param operator The address of the operator
-    /// @return Array of operator addresses in the set
-    function getSymbioticOperatorFromOperatorSet(
-        uint96 operatorSetId,
-        address operator
-    )
+    /// @notice Get all operator sets
+    /// @return Array of operator set IDs
+    function getLinglongSubnets() external view returns (uint32[] memory);
+
+    /// @notice Get all middleware addresses for a specific protocol
+    /// @param protocol The protocol type to filter by
+    /// @return Array of middleware addresses for the specified protocol
+    function getRestakingMiddlewareByProtocol(RestakingProtocol protocol)
         external
         view
-        returns (bool);
+        returns (address[] memory);
 
     /// @notice Get all operator sets that an operator has allocated magnitude to
     /// @param operator The operator whose allocated sets to fetch
@@ -247,11 +205,11 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Get all strategies that an operator has allocated magnitude to in a specific operator set
     /// @param operator The operator whose allocated strategies to fetch
-    /// @param baseOperatorSetId The ID of the operator set to query
+    /// @param linglongSubsetId The ID of the operator set to query
     /// @return allocatedStrategies Array of strategy addresses that the operator has allocated magnitude to in the operator set
     function getEigenLayerOperatorAllocatedStrategies(
         address operator,
-        uint32 baseOperatorSetId
+        uint32 linglongSubsetId
     )
         external
         view
@@ -259,27 +217,37 @@ interface ITaiyiRegistryCoordinator {
 
     /// @notice Get all strategies that an operator has allocated magnitude to in a specific symbiotic subnetwork
     /// @param operator The operator whose allocated strategies to fetch
-    /// @param baseSubnetworkId The ID of the subnetwork to query
+    /// @param linglongSubsetId The ID of the subnetwork to query
     /// @return allocatedStrategies Array of strategy addresses that the operator has allocated magnitude to in the subnetwork
     function getSymbioticOperatorAllocatedStrategies(
         address operator,
-        uint96 baseSubnetworkId
+        uint32 linglongSubsetId
     )
         external
         view
         returns (address[] memory allocatedStrategies);
 
+    /// @notice Get the amount of strategy allocation for an operator in an EigenLayer operator set
+    /// @param operator The operator to query
+    /// @param linglongSubsetId The operator set ID
+    /// @param strategy The strategy to query
+    /// @return The amount of allocation
     function getEigenLayerOperatorAllocatedStrategiesAmount(
         address operator,
-        uint32 baseOperatorSetId,
+        uint32 linglongSubsetId,
         IStrategy strategy
     )
         external
         returns (uint256);
 
+    /// @notice Get the amount of strategy allocation for an operator in a Symbiotic subnetwork
+    /// @param operator The operator to query
+    /// @param linglongSubsetId The subnetwork ID
+    /// @param strategy The strategy to query
+    /// @return The amount of allocation
     function getSymbioticOperatorAllocatedStrategiesAmount(
         address operator,
-        uint96 baseSubnetworkId,
+        uint32 linglongSubsetId,
         IStrategy strategy
     )
         external
@@ -326,42 +294,34 @@ interface ITaiyiRegistryCoordinator {
         returns (bytes32);
 
     /// @notice whether the operator set Id is set
-    /// @param operatorSetId operator Id
+    /// @param linglongSubsetId operator Id
     /// @return yes or no
-    function isEigenlayerOperatorSetExist(uint32 operatorSetId)
-        external
-        view
-        returns (bool);
-
-    /// @notice whether the operator set Id is set
-    /// @param operatorSetId operator Id
-    /// @return yes or no
-    function isSymbioticOperatorSetExist(uint96 operatorSetId)
+    function isLinglongSubsetExist(uint32 linglongSubsetId)
         external
         view
         returns (bool);
 
     /// @notice Checks if an operator is in a specific operator set
-    /// @param operatorSetId The operator set ID
+    /// @param linglongSubsetId The operator set ID
     /// @param operator The operator address
     /// @return True if the operator is in the set, false otherwise
-    function isEigenLayerOperatorInSet(
-        uint32 operatorSetId,
+    function isOperatorInLinglongSubset(
+        uint32 linglongSubsetId,
         address operator
     )
         external
         view
         returns (bool);
 
-    /// @notice Checks if an operator is in a specific symbiotic operator set
-    /// @param baseSubnetworkId The ID of the subnetwork
-    /// @param operator The operator address
-    /// @return True if the operator is in the set, false otherwise
-    function isSymbioticOperatorInSubnetwork(
-        uint96 baseSubnetworkId,
-        address operator
-    )
+    /// @notice External function to decode operator data
+    /// @param data The data to decode
+    /// @return socket The socket string
+    /// @return params The PubkeyRegistrationParams
+    function decodeOperatorData(bytes calldata data)
         external
-        view
-        returns (bool);
+        pure
+        returns (
+            string memory socket,
+            IPubkeyRegistry.PubkeyRegistrationParams memory params
+        );
 }

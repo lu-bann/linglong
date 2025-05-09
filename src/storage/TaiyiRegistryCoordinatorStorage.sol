@@ -68,7 +68,7 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     IAllocationManager public allocationManager;
 
     /// @notice operator sets with protocol type information
-    OperatorSubsetLib.OperatorSets internal _operatorSets;
+    OperatorSubsetLib.LinglongSubsets internal _linglongSubsets;
 
     /// @notice maps operator address => operator id and status
     mapping(address => OperatorInfo) internal _operatorInfo;
