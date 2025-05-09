@@ -136,13 +136,13 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         _optInToVault(operator, address(vault4));
 
         // Register operator with middleware
-        bytes memory key = abi.encode(operator);
-        bytes memory signature = _generateKeySignature(key, operatorSecretKey);
+        bytes memory operatorEncoded = abi.encode(operator);
+        bytes memory signature = _generateKeySignature(operatorEncoded, operatorSecretKey);
         uint96[] memory subnetworks =
             _createSubnetworksArray(validatorSubnetworkId, underwriterSubnetworkId);
 
         vm.startPrank(operator);
-        middleware.registerOperator(key, signature, subnetworks);
+        middleware.registerOperator(operatorEncoded, signature, subnetworks);
         vm.stopPrank();
 
         // Verify that the mocked getOperatorAllocatedSubnetworks returns what we expect
@@ -300,8 +300,9 @@ contract SymbioticMiddlewareTest is POCBaseTest {
         bytes memory evidence = abi.encode("Mock evidence");
 
         // Check which protocol the operator is registered with
-        bool isSymbioticOperator =
-            registry.isSymbioticOperatorInSubnetwork(validatorSubnetworkId, operator);
+        bool isSymbioticOperator = registry.isOperatorInLinglongSubset(
+            OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID, operator
+        );
         console.log("Is Symbiotic Operator:", isSymbioticOperator);
 
         // Perform the slashing based on the operator's restaking protocol
@@ -541,11 +542,13 @@ contract SymbioticMiddlewareTest is POCBaseTest {
     }
 
     function _setupSubnetworks() internal impersonate(owner) {
-        middleware.createNewSubnetwork(VALIDATOR_SUBNETWORK, 0);
-        middleware.createNewSubnetwork(UNDERWRITER_SUBNETWORK, 0);
+        middleware.createNewSubnetwork(OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID, 0);
+        middleware.createNewSubnetwork(
+            OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID, 0
+        );
 
-        validatorSubnetworkId = VALIDATOR_SUBNETWORK;
-        underwriterSubnetworkId = UNDERWRITER_SUBNETWORK;
+        validatorSubnetworkId = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
+        underwriterSubnetworkId = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
     }
 
     // Helper functions for working with uint32/uint96 arrays

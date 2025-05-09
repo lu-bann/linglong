@@ -34,7 +34,7 @@ contract DeployTest is Test {
         vm.deal(deployer, 1000 ether);
         vm.deal(implOwner, 1000 ether);
 
-        deploy.run("deploy-test-config.json");
+        deploy.run("deploy-test-config.json", 0.1 ether);
         setRegistry.run();
         setupContract.run();
     }

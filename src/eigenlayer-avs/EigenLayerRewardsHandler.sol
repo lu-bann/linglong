@@ -15,6 +15,7 @@ import {
     IRewardsCoordinatorTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IRewardsCoordinator.sol";
 
+import { OperatorSubsetLib } from "../libs/OperatorSubsetLib.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
 /// @title EigenLayerRewardsHandler
@@ -116,7 +117,7 @@ contract EigenLayerRewardsHandler {
 
         // Get underwriter operators and total staked amount
         address[] memory underwriterOperators = middleware.getRegistryCoordinator()
-            .getEigenLayerOperatorSetOperators(uint32(0));
+            .getLinglongSubsetOperators(OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID);
 
         if (underwriterOperators.length == 0) {
             revert NoUnderwriterOperators();
@@ -159,7 +160,7 @@ contract EigenLayerRewardsHandler {
     {
         // Get validator operators for this AVS
         address[] memory operators = middleware.getRegistryCoordinator()
-            .getEigenLayerOperatorSetOperators(uint32(0));
+            .getLinglongSubsetOperators(OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID);
 
         if (operators.length == 0) {
             revert NoUnderwriterOperators();

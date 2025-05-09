@@ -33,8 +33,6 @@ library EigenLayerMiddlewareLib {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
-    using OperatorSubsetLib for uint96;
-    using OperatorSubsetLib for uint32;
 
     /// @notice Custom errors
     error OperatorNotRegisteredInEigenLayer();
@@ -78,7 +76,7 @@ library EigenLayerMiddlewareLib {
 
         // Count total strategies first
         for (uint256 i = 0; i < operatorSetsLength;) {
-            (, uint32 baseId) = operatorSets[i].id.decodeOperatorSetId32();
+            uint32 baseId = operatorSets[i].id;
             address[] memory setStrategies = registryCoordinator
                 .getEigenLayerOperatorAllocatedStrategies(operator, baseId);
             totalStrategiesCount += setStrategies.length;
@@ -97,7 +95,7 @@ library EigenLayerMiddlewareLib {
 
         // Fill array with all strategies
         for (uint256 i = 0; i < operatorSetsLength;) {
-            (, uint32 baseId) = operatorSets[i].id.decodeOperatorSetId32();
+            uint32 baseId = operatorSets[i].id;
             address[] memory setStrategies = registryCoordinator
                 .getEigenLayerOperatorAllocatedStrategies(operator, baseId);
             uint256 setStrategiesLength = setStrategies.length;
@@ -264,18 +262,19 @@ library EigenLayerMiddlewareLib {
         ITaiyiRegistryCoordinator registryCoordinator,
         IStrategy[] memory strategies,
         uint256 minStake,
-        uint32 operatorSetType
+        uint32 linglongSubsetId
     )
         internal
         returns (uint32 operatorSetId)
     {
         // Get the current operator set count from allocationManager
-        operatorSetId = uint32(operatorSetType).encodeOperatorSetId32(
-            ITaiyiRegistryCoordinator.RestakingProtocol.EIGENLAYER
-        );
-
+        operatorSetId = linglongSubsetId;
         require(
-            !registryCoordinator.isEigenlayerOperatorSetExist(operatorSetId),
+            OperatorSubsetLib.isEigenlayerProtocolID(linglongSubsetId),
+            "Invalid eigenlayer subset ID"
+        );
+        require(
+            !registryCoordinator.isLinglongSubsetExist(operatorSetId),
             OperatorSetAlreadyExists()
         );
 
@@ -292,7 +291,7 @@ library EigenLayerMiddlewareLib {
             avsAddress, createSetParams
         );
 
-        registryCoordinator.createOperatorSet(operatorSetId, minStake);
+        registryCoordinator.createLinglongSubset(operatorSetId, minStake);
 
         return operatorSetId;
     }

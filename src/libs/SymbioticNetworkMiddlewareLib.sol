@@ -18,6 +18,8 @@ import { OperatorSubsetLib } from "./OperatorSubsetLib.sol";
 import { SafeCast96To32Lib } from "./SafeCast96To32Lib.sol";
 
 import { SafeCast96To32Lib } from "./SafeCast96To32Lib.sol";
+
+import { SafeCast } from "@openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import { Subnetworks } from "@symbiotic-middleware-sdk/extensions/Subnetworks.sol";
 import { Subnetwork } from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
@@ -25,7 +27,6 @@ import { Subnetwork } from "@symbiotic/contracts/libraries/Subnetwork.sol";
 /// @notice Library containing core logic for the SymbioticNetworkMiddleware contract
 library SymbioticNetworkMiddlewareLib {
     using EnumerableSet for EnumerableSet.Bytes32Set;
-    using OperatorSubsetLib for uint96;
     using EnumerableMapLib for EnumerableMapLib.Uint256ToBytes32Map;
     using SafeCast96To32Lib for uint96[];
     using SafeCast96To32Lib for uint96;
@@ -197,7 +198,9 @@ library SymbioticNetworkMiddlewareLib {
         view
         returns (uint96[] memory allocatedSubnetworks)
     {
-        uint96[] memory subnetworks = registryCoordinator.getSymbioticSubnetworks();
+        uint96[] memory subnetworks = new uint96[](2);
+        subnetworks[0] = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
+        subnetworks[1] = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
 
         // First allocate a temporary array to hold all potential subnetworks
         uint96[] memory tempAllocated = new uint96[](subnetworks.length);
@@ -205,16 +208,12 @@ library SymbioticNetworkMiddlewareLib {
 
         // First pass: Add all allocated subnetworks to the temporary array
         for (uint256 i = 0; i < subnetworks.length; i++) {
-            (, uint96 subnetworkId) = subnetworks[i].decodeOperatorSetId96();
-            if (
-                registryCoordinator.isSymbioticOperatorInSubnetwork(
-                    subnetworkId, operator
-                )
-            ) {
+            uint32 subnetworkId = uint32(subnetworks[i]);
+            if (registryCoordinator.isOperatorInLinglongSubset(subnetworkId, operator)) {
                 // Check if this subnetworkId is already in the array
                 bool isDuplicate = false;
                 for (uint256 j = 0; j < allocatedCount; j++) {
-                    if (tempAllocated[j] == subnetworkId) {
+                    if (tempAllocated[j] == SafeCast.toUint96(subnetworkId)) {
                         isDuplicate = true;
                         break;
                     }
@@ -222,7 +221,7 @@ library SymbioticNetworkMiddlewareLib {
 
                 // Only add if not a duplicate
                 if (!isDuplicate) {
-                    tempAllocated[allocatedCount] = subnetworkId;
+                    tempAllocated[allocatedCount] = SafeCast.toUint96(subnetworkId);
                     allocatedCount++;
                 }
             }

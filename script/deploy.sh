@@ -15,5 +15,5 @@ fi
 export FOUNDRY_PROFILE=ci
 forge script --rpc-url $EXECUTION_URL \
 -vvvv --broadcast ./script/Deployments.s.sol:Deploy \
---sig "run(string memory configFile)" \
--- eigenlayer-deploy-config-devnet.json
+--sig "run(string memory configFile, uint256 minCollateral)" \
+-- eigenlayer-deploy-config-devnet.json 0.1ether

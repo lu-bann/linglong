@@ -101,7 +101,9 @@ contract EigenLayerMiddleware is
     /// @dev Validates that msg.sender is registered in the validator operatorSet with ID 0
     modifier onlyValidatorOperatorSet() {
         if (
-            REGISTRY_COORDINATOR.isEigenLayerOperatorInSet(uint32(0), msg.sender) == false
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, msg.sender
+            )
         ) {
             revert
                 EigenLayerMiddlewareLib
@@ -226,8 +228,8 @@ contract EigenLayerMiddleware is
         returns (bytes32)
     {
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
-                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, msg.sender
             )
         ) {
             revert
@@ -259,8 +261,8 @@ contract EigenLayerMiddleware is
     /// @dev Removes all delegations and unregisters from the Registry contract
     function unregisterValidators(bytes32 registrationRoot) external {
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
-                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, msg.sender
             )
         ) {
             revert
@@ -337,8 +339,8 @@ contract EigenLayerMiddleware is
         external
     {
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
-                OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, msg.sender
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, msg.sender
             )
         ) {
             revert
@@ -347,8 +349,8 @@ contract EigenLayerMiddleware is
         }
 
         if (
-            !REGISTRY_COORDINATOR.getEigenLayerOperatorFromOperatorSet(
-                OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, delegateeAddress
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID, delegateeAddress
             )
         ) {
             revert

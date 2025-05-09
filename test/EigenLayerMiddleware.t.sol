@@ -460,10 +460,10 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         middleware.updateAVSMetadataURI("https://taiyi.wtf");
 
         validatorOperatorSetId = middleware.createOperatorSet(
-            strategies, OperatorSubsetLib.VALIDATOR_SUBSET_TYPE, 0
+            strategies, OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID, 0
         );
         underwriterOperatorSetId = middleware.createOperatorSet(
-            strategies, OperatorSubsetLib.UNDERWRITER_SUBSET_TYPE, 0
+            strategies, OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID, 0
         );
         vm.stopPrank();
 
@@ -590,11 +590,9 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         assertTrue(operatorFound, "Operator should be found in operator set members");
 
         // Check the operator is in the operator set from the registry coordinator
-        (, uint32 baseOperatorSetId) = opSet.id.decodeOperatorSetId32();
+        uint32 baseOperatorSetId = opSet.id;
         assertTrue(
-            registryCoordinator.getEigenLayerOperatorFromOperatorSet(
-                baseOperatorSetId, operator
-            ),
+            registryCoordinator.isOperatorInLinglongSubset(baseOperatorSetId, operator),
             "Operator should be in the operator set"
         );
         assertEq(baseOperatorSetId, uint32(0), "Operator set ID should match");
@@ -638,28 +636,17 @@ contract EigenlayerMiddlewareTest is Test, G2Operations {
         );
 
         // 2. Verify they are members of the operatorSet
-        (, uint32 opSetId) = underwriterOperatorSetId.decodeOperatorSetId32();
-        address[] memory opSetMembers =
-            registryCoordinator.getEigenLayerOperatorSetOperators(opSetId);
-
-        bool primaryOpFound = false;
-        bool underwriterOpFound = false;
-
-        for (uint256 i = 0; i < opSetMembers.length; i++) {
-            if (opSetMembers[i] == primaryOp) {
-                primaryOpFound = true;
-            }
-            if (opSetMembers[i] == underwriterOp) {
-                underwriterOpFound = true;
-            }
-        }
 
         assertFalse(
-            primaryOpFound,
+            registryCoordinator.isOperatorInLinglongSubset(
+                underwriterOperatorSetId, primaryOp
+            ),
             "Primary operator should not be a member of the underwriter operator set"
         );
         assertTrue(
-            underwriterOpFound,
+            registryCoordinator.isOperatorInLinglongSubset(
+                underwriterOperatorSetId, underwriterOp
+            ),
             "Underwriter operator should be a member of the underwriter operator set"
         );
     }

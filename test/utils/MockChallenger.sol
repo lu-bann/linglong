@@ -72,7 +72,7 @@ contract MockLinglongChallenger is ILinglongChallenger {
 
     function isSlashingInProgress(
         address,
-        uint96
+        uint32
     )
         external
         view
