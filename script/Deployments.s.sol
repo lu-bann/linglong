@@ -70,6 +70,8 @@ contract Deploy is Script, Test {
     address public urc;
     address public implOwner;
 
+    uint256 public urcMinCollateral;
+
     // Constant for admin storage slot
     bytes32 constant ADMIN_SLOT =
         0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
@@ -302,7 +304,7 @@ contract Deploy is Script, Test {
             registry: urc,
             slasher: address(linglongSlasherInfo.proxy),
             allocationManager: allocationManager,
-            registrationMinCollateral: 0
+            registrationMinCollateral: urcMinCollateral
         });
         ProxyAdmin(eigenLayerMiddlewareInfo.admin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(deployedContracts.eigenLayerMiddleware)),
@@ -363,9 +365,9 @@ contract Deploy is Script, Test {
         vm.stopBroadcast();
 
         deployEigenLayer(configFileName);
-
+        vm.startBroadcast();
         IRegistry.Config memory registryConfig = IRegistry.Config({
-            minCollateralWei: 0.1 ether,
+            minCollateralWei: uint80(urcMinCollateral),
             fraudProofWindow: 7200,
             unregistrationDelay: 7200,
             slashWindow: 7200,
@@ -376,6 +378,8 @@ contract Deploy is Script, Test {
         emit log_address(address(registry));
         urc = address(registry);
         vm.serializeAddress(taiyiAddresses, "urc", address(registry));
+        vm.serializeUint(taiyiAddresses, "urcMinCollateral", urcMinCollateral);
+        vm.stopBroadcast();
     }
 
     function setupHoleskyAddresses() internal {
@@ -391,7 +395,8 @@ contract Deploy is Script, Test {
         urc = 0x0000000000000000000000000000000000000000;
     }
 
-    function run(string memory configFileName) public {
+    function run(string memory configFileName, uint256 minCollateral) public {
+        urcMinCollateral = minCollateral;
         // Get deployer address from private key
         (uint256 proxyDeployerPrivateKey, uint256 implPrivateKey) = getPrivateKeys();
         deployer = vm.addr(proxyDeployerPrivateKey);
