@@ -54,6 +54,8 @@ import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
 import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol";
 
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+
 contract Deploy is Script, Test {
     using stdStorage for StdStorage;
 
@@ -367,7 +369,7 @@ contract Deploy is Script, Test {
         deployEigenLayer(configFileName);
         vm.startBroadcast();
         IRegistry.Config memory registryConfig = IRegistry.Config({
-            minCollateralWei: uint80(urcMinCollateral),
+            minCollateralWei: SafeCast.toUint80(urcMinCollateral),
             fraudProofWindow: 7200,
             unregistrationDelay: 7200,
             slashWindow: 7200,

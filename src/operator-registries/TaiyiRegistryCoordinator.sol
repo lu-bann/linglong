@@ -722,6 +722,17 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
+        require(
+            _linglongSubsetIds.length == 2,
+            "Eigenlayer deregistration requires exactly one subset"
+        );
+
+        require(
+            _linglongSubsetIds[0] == OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID
+                && _linglongSubsetIds[1] == OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID,
+            "Invalid eigenlayer subset IDs"
+        );
+
         operatorInfo.status = OperatorStatus.DEREGISTERED;
         for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
             require(

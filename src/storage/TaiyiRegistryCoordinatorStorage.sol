@@ -29,7 +29,7 @@ import { EnumerableSet } from
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | allocationManager    | contract IAllocationManager                                          | 3    | 0      | 20    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
-// | _operatorSets        | struct OperatorSubsetLib.OperatorSets                                | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
+// | _linglongSubsets     | struct OperatorSubsetLib.LinglongSubsets                             | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorInfo        | mapping(address => struct ITaiyiRegistryCoordinator.OperatorInfo)    | 5    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
