@@ -44,6 +44,8 @@ import { SlashingLib } from "../libs/SlashingLib.sol";
 import { SymbioticNetworkMiddlewareLib } from "../libs/SymbioticNetworkMiddlewareLib.sol";
 import { SymbioticNetworkStorage } from "../storage/SymbioticNetworkStorage.sol";
 import { DelegationStore } from "../types/CommonTypes.sol";
+
+import { SafeCast } from "@openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import { EnumerableSetLib } from "@solady/utils/EnumerableSetLib.sol";
 import "forge-std/console.sol";
 
@@ -62,7 +64,6 @@ contract SymbioticNetworkMiddleware is
     using EnumerableSetLib for EnumerableSetLib.AddressSet;
     using Subnetwork for address;
     using Subnetwork for bytes32;
-    using OperatorSubsetLib for uint96;
     using SafeCast96To32Lib for uint96[];
     using SlashingLib for DelegationStore;
 
@@ -72,8 +73,8 @@ contract SymbioticNetworkMiddleware is
 
     modifier onlyValidatorSubnetwork() {
         if (
-            !REGISTRY_COORDINATOR.isSymbioticOperatorInSubnetwork(
-                VALIDATOR_SUBNETWORK, msg.sender
+            !REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID, msg.sender
             )
         ) {
             revert
@@ -119,20 +120,22 @@ contract SymbioticNetworkMiddleware is
     // ==============================================================================================
 
     /// @notice Creates a new subnetwork with the given ID
-    /// @param minStake The minimum stake required for the subnetwork
-    /// @param baseSubnetworkId The ID of the base subnetwork to create
+    /// @param linglongSubsetId The ID of the base subnetwork to create
     function createNewSubnetwork(
-        uint96 baseSubnetworkId,
+        uint32 linglongSubsetId,
         uint256 minStake
     )
         external
         checkAccess
     {
-        uint96 encodedSubnetworkId = baseSubnetworkId.encodeOperatorSetId96(
-            ITaiyiRegistryCoordinator.RestakingProtocol.SYMBIOTIC
+        require(
+            linglongSubsetId == OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID
+                || linglongSubsetId == OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID,
+            "Invalid subnetwork"
         );
+        uint96 encodedSubnetworkId = SafeCast.toUint96(linglongSubsetId);
         super._registerSubnetwork(encodedSubnetworkId);
-        REGISTRY_COORDINATOR.createSubnetwork(encodedSubnetworkId, minStake);
+        REGISTRY_COORDINATOR.createLinglongSubset(linglongSubsetId, minStake);
         SUBNETWORK_COUNT = SUBNETWORK_COUNT + 1;
     }
 

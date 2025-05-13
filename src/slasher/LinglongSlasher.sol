@@ -40,7 +40,6 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
     using ECDSA for bytes32;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.Bytes32Set;
-    using OperatorSubsetLib for uint96;
 
     /// @dev Modifier to check that the contract is properly initialized
     modifier onlyInitialized() {
@@ -374,12 +373,12 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
 
     /// @dev Check if slashing is already in progress
     /// @param operator The operator address
-    /// @param operatorSetId The operator set ID
+    /// @param linglongSubsetId The operator set ID
     /// @param challengerContract The challenger contract address
     /// @return notInProgress True if slashing is not already in progress
     function _checkSlashingNotInProgress(
         address operator,
-        uint96 operatorSetId,
+        uint32 linglongSubsetId,
         address challengerContract
     )
         internal
@@ -394,7 +393,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         }
 
         (bool inProgress,) =
-            this.isSlashingInProgress(operator, operatorSetId, challengerContract);
+            this.isSlashingInProgress(operator, linglongSubsetId, challengerContract);
 
         return !inProgress;
     }
@@ -433,11 +432,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         }
 
         // Check if slashing is already in progress
-        if (
-            !_checkSlashingNotInProgress(
-                operator, uint96(operatorSetId), challengerContract
-            )
-        ) {
+        if (!_checkSlashingNotInProgress(operator, operatorSetId, challengerContract)) {
             revert SlashingInProgress();
         }
 
@@ -483,15 +478,16 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
             revert ProofVerificationFailed();
         }
 
-        uint96 subnetwork;
-        uint96[] memory subnetworks = ISymbioticNetworkMiddleware(SYMBIOTIC_MIDDLEWARE)
-            .getOperatorAllocatedSubnetworks(operator);
+        uint32 subnetwork;
+        uint32[] memory subnetworks = new uint32[](2);
+        subnetworks[0] = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
+        subnetworks[1] = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
 
         for (uint256 i = 0; i < subnetworks.length; i++) {
-            (, uint96 baseId) = subnetworks[i].decodeOperatorSetId96();
+            uint32 baseId = subnetworks[i];
             if (
                 ITaiyiRegistryCoordinator(TAIYI_REGISTRY_COORDINATOR)
-                    .getSymbioticOperatorFromOperatorSet(baseId, operator)
+                    .isOperatorInLinglongSubset(baseId, operator)
             ) {
                 subnetwork = subnetworks[i];
                 break;
@@ -634,7 +630,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
     /// @inheritdoc ILinglongSlasher
     function isSlashingInProgress(
         address operator,
-        uint96 operatorSetId,
+        uint32 linglongSubsetId,
         address challengeContract
     )
         external
@@ -643,7 +639,7 @@ contract LinglongSlasher is Initializable, OwnableUpgradeable, LinglongSlasherSt
         returns (bool inProgress, uint256 slashingId)
     {
         return ILinglongChallenger(challengeContract).isSlashingInProgress(
-            operator, operatorSetId
+            operator, linglongSubsetId
         );
     }
 }

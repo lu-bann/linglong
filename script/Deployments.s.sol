@@ -54,6 +54,8 @@ import { StdStorage, stdStorage } from "forge-std/Test.sol";
 
 import { IEigenLayerMiddleware } from "src/interfaces/IEigenLayerMiddleware.sol";
 
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+
 contract Deploy is Script, Test {
     using stdStorage for StdStorage;
 
@@ -69,6 +71,8 @@ contract Deploy is Script, Test {
     address public deployer;
     address public urc;
     address public implOwner;
+
+    uint256 public urcMinCollateral;
 
     // Constant for admin storage slot
     bytes32 constant ADMIN_SLOT =
@@ -302,7 +306,7 @@ contract Deploy is Script, Test {
             registry: urc,
             slasher: address(linglongSlasherInfo.proxy),
             allocationManager: allocationManager,
-            registrationMinCollateral: 0
+            registrationMinCollateral: urcMinCollateral
         });
         ProxyAdmin(eigenLayerMiddlewareInfo.admin).upgradeAndCall(
             ITransparentUpgradeableProxy(address(deployedContracts.eigenLayerMiddleware)),
@@ -363,9 +367,9 @@ contract Deploy is Script, Test {
         vm.stopBroadcast();
 
         deployEigenLayer(configFileName);
-
+        vm.startBroadcast();
         IRegistry.Config memory registryConfig = IRegistry.Config({
-            minCollateralWei: 0.1 ether,
+            minCollateralWei: SafeCast.toUint80(urcMinCollateral),
             fraudProofWindow: 7200,
             unregistrationDelay: 7200,
             slashWindow: 7200,
@@ -376,6 +380,8 @@ contract Deploy is Script, Test {
         emit log_address(address(registry));
         urc = address(registry);
         vm.serializeAddress(taiyiAddresses, "urc", address(registry));
+        vm.serializeUint(taiyiAddresses, "urcMinCollateral", urcMinCollateral);
+        vm.stopBroadcast();
     }
 
     function setupHoleskyAddresses() internal {
@@ -391,7 +397,8 @@ contract Deploy is Script, Test {
         urc = 0x0000000000000000000000000000000000000000;
     }
 
-    function run(string memory configFileName) public {
+    function run(string memory configFileName, uint256 minCollateral) public {
+        urcMinCollateral = minCollateral;
         // Get deployer address from private key
         (uint256 proxyDeployerPrivateKey, uint256 implPrivateKey) = getPrivateKeys();
         deployer = vm.addr(proxyDeployerPrivateKey);

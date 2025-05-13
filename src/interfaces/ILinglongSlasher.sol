@@ -134,13 +134,13 @@ interface ILinglongSlasher is ISlasher {
 
     /// @notice Check if a slashing request is currently in progress for an operator
     /// @param operator The operator address to check
-    /// @param operatorSetId The operator set ID
+    /// @param linglongSubsetId The operator set ID
     /// @param challengeContract The challenger contract to check
     /// @return inProgress Whether a slashing is in progress
     /// @return slashingId The ID of the slashing request (if any)
     function isSlashingInProgress(
         address operator,
-        uint96 operatorSetId,
+        uint32 linglongSubsetId,
         address challengeContract
     )
         external

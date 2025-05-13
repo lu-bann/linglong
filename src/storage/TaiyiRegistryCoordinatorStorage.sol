@@ -29,7 +29,7 @@ import { EnumerableSet } from
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | allocationManager    | contract IAllocationManager                                          | 3    | 0      | 20    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
-// | _operatorSets        | struct OperatorSubsetLib.OperatorSets                                | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
+// | _linglongSubsets     | struct OperatorSubsetLib.LinglongSubsets                             | 4    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
 // | _operatorInfo        | mapping(address => struct ITaiyiRegistryCoordinator.OperatorInfo)    | 5    | 0      | 32    | src/storage/TaiyiRegistryCoordinatorStorage.sol:TaiyiRegistryCoordinatorStorage |
 // |----------------------+----------------------------------------------------------------------+------+--------+-------+---------------------------------------------------------------------------------|
@@ -68,7 +68,7 @@ abstract contract TaiyiRegistryCoordinatorStorage is ITaiyiRegistryCoordinator {
     IAllocationManager public allocationManager;
 
     /// @notice operator sets with protocol type information
-    OperatorSubsetLib.OperatorSets internal _operatorSets;
+    OperatorSubsetLib.LinglongSubsets internal _linglongSubsets;
 
     /// @notice maps operator address => operator id and status
     mapping(address => OperatorInfo) internal _operatorInfo;

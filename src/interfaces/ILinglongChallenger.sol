@@ -113,12 +113,12 @@ interface ILinglongChallenger {
 
     /// @notice Check if slashing is in progress for an operator
     /// @param operator The operator address
-    /// @param operatorSetId The operator set ID
+    /// @param linglongSubsetId The operator set ID
     /// @return inProgress Whether slashing is in progress
     /// @return slashingId The ID of the slashing
     function isSlashingInProgress(
         address operator,
-        uint96 operatorSetId
+        uint32 linglongSubsetId
     )
         external
         view
