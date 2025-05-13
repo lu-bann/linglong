@@ -713,6 +713,7 @@ contract TaiyiRegistryCoordinator is
     /// @notice Deregisters an operator from the EigenLayer protocol
     /// @param operator Address of the operator to deregister
     /// @param _linglongSubsetIds Array of subset IDs to deregister from
+
     function _deregisterOperatorForEigenlayer(
         address operator,
         uint32[] memory _linglongSubsetIds
@@ -722,18 +723,6 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
-        require(
-            _linglongSubsetIds.length == 2,
-            "Eigenlayer deregistration requires exactly one subset"
-        );
-
-        require(
-            _linglongSubsetIds[0] == OperatorSubsetLib.EIGENLAYER_VALIDATOR_SUBSET_ID
-                && _linglongSubsetIds[1] == OperatorSubsetLib.EIGENLAYER_UNDERWRITER_SUBSET_ID,
-            "Invalid eigenlayer subset IDs"
-        );
-
-        operatorInfo.status = OperatorStatus.DEREGISTERED;
         for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
             require(
                 OperatorSubsetLib.isEigenlayerProtocolID(_linglongSubsetIds[i]),
@@ -742,6 +731,21 @@ contract TaiyiRegistryCoordinator is
         }
 
         _linglongSubsets.removeOperatorFromLinglongSubsets(_linglongSubsetIds, operator);
+        // Check if the operator is still in any Linglong subset
+        bool stillInAnySubset = false;
+        uint256[] memory allSubsetIds = _linglongSubsets.linglongSubsetIds.values();
+        for (uint256 i = 0; i < allSubsetIds.length; i++) {
+            uint32 subsetId = uint32(allSubsetIds[i]);
+            if (_linglongSubsets.isOperatorInLinglongSubset(subsetId, operator)) {
+                stillInAnySubset = true;
+                break;
+            }
+        }
+
+        // Only set status to DEREGISTERED if not in any subset
+        if (!stillInAnySubset) {
+            operatorInfo.status = OperatorStatus.DEREGISTERED;
+        }
     }
 
     /// @notice Registers an operator for the Symbiotic protocol
@@ -775,13 +779,27 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
-        operatorInfo.status = OperatorStatus.DEREGISTERED;
-
         uint32[] memory linglongSubsetIds = new uint32[](2);
         linglongSubsetIds[0] = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
         linglongSubsetIds[1] = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
 
         _linglongSubsets.removeOperatorFromLinglongSubsets(linglongSubsetIds, operator);
+
+        // Check if the operator is still in any Linglong subset
+        bool stillInAnySubset = false;
+        uint256[] memory allSubsetIds = _linglongSubsets.linglongSubsetIds.values();
+        for (uint256 i = 0; i < allSubsetIds.length; i++) {
+            uint32 subsetId = uint32(allSubsetIds[i]);
+            if (_linglongSubsets.isOperatorInLinglongSubset(subsetId, operator)) {
+                stillInAnySubset = true;
+                break;
+            }
+        }
+
+        // Only set status to DEREGISTERED if not in any subset
+        if (!stillInAnySubset) {
+            operatorInfo.status = OperatorStatus.DEREGISTERED;
+        }
     }
 
     /// @notice Checks the initial EigenLayer stake for an operator
