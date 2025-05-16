@@ -36,11 +36,6 @@ import {
     TransparentUpgradeableProxy
 } from
     "../lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
-import { PubkeyRegistry } from "src/operator-registries/PubkeyRegistry.sol";
-import { SocketRegistry } from "src/operator-registries/SocketRegistry.sol";
-import { LinglongSlasher } from "src/slasher/LinglongSlasher.sol";
-
-import { ITaiyiRegistryCoordinator } from "src/interfaces/ITaiyiRegistryCoordinator.sol";
 
 import { IAVSRegistrar } from
     "../lib/eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
