@@ -56,6 +56,39 @@ import { StdStorage, stdStorage } from "forge-std/Test.sol";
 contract SetRegistry is Script, Test {
     using stdStorage for StdStorage;
 
+    // Network enum for better readability
+    enum Network {
+        DEVNET,
+        HOLESKY,
+        HOODI
+    }
+
+    function getNetwork() internal view returns (Network) {
+        string memory network = vm.envString("NETWORK");
+
+        if (
+            keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("holesky"))
+        ) {
+            return Network.HOLESKY;
+        } else if (
+            keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("hoodi"))
+        ) {
+            return Network.HOODI;
+        } else {
+            return Network.DEVNET;
+        }
+    }
+
+    function getOutputDir(Network network) internal pure returns (string memory) {
+        if (network == Network.HOLESKY) {
+            return "script/output/holesky";
+        } else if (network == Network.HOODI) {
+            return "script/output/hoodi";
+        } else {
+            return "script/output/devnet";
+        }
+    }
+
     function run() public {
         // Get deployer address from private key
         string memory pkString = vm.envString("PROXY_OWNER_PRIVATE_KEY");
@@ -74,8 +107,15 @@ contract SetRegistry is Script, Test {
         address proxyDeployer = vm.addr(proxyDeployerPrivateKey);
         address implDeployer = vm.addr(implPrivateKey);
 
+        // Get network and set up paths
+        Network network = getNetwork();
+        string memory outputDir = getOutputDir(network);
         string memory outputFile =
-            string(bytes("script/output/devnet/taiyiAddresses.json"));
+            string(bytes(string.concat(outputDir, "/taiyiAddresses.json")));
+
+        // Create output directory if it doesn't exist
+        vm.createDir(outputDir, true);
+
         string memory output_data = vm.readFile(outputFile);
 
         TaiyiRegistryCoordinator taiyiRegistryCoordinator = TaiyiRegistryCoordinator(
@@ -86,31 +126,45 @@ contract SetRegistry is Script, Test {
             stdJson.readAddress(output_data, ".taiyiAddresses.eigenLayerMiddleware")
         );
 
-        string memory eigenLayerOutputFile = string(
-            bytes(
-                "script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json"
-            )
-        );
+        // Get network-specific addresses
+        address allocationManagerAddr;
+        address permissionControllerAddr;
 
-        string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
-        // address wethStrategyAddr =
-        //     stdJson.readAddress(eigenLayerOutput_data, ".addresses.strategies.WETH");
-        address allocationManagerAddr =
-            stdJson.readAddress(eigenLayerOutput_data, ".addresses.allocationManager");
-        address permissionController =
-            stdJson.readAddress(eigenLayerOutput_data, ".addresses.permissionController");
+        if (network == Network.DEVNET) {
+            // Devnet deployment - read from file
+            string memory eigenLayerOutputFile = string(
+                bytes(
+                    "script/output/devnet/SLASHING_deploy_from_scratch_deployment_data.json"
+                )
+            );
+
+            string memory eigenLayerOutput_data = vm.readFile(eigenLayerOutputFile);
+            allocationManagerAddr =
+                stdJson.readAddress(eigenLayerOutput_data, ".addresses.allocationManager");
+            permissionControllerAddr = stdJson.readAddress(
+                eigenLayerOutput_data, ".addresses.permissionController"
+            );
+        } else if (network == Network.HOLESKY) {
+            // Use hardcoded addresses for Holesky and Hoodi
+            allocationManagerAddr = 0x78469728304326CBc65f8f95FA756B0B73164462;
+            permissionControllerAddr = 0x598cb226B591155F767dA17AfE7A2241a68C5C10;
+        } else if (network == Network.HOODI) {
+            revert("Hoodi is not supported yet");
+        } else {
+            revert("Invalid network");
+        }
 
         AllocationManager allocationManager = AllocationManager(allocationManagerAddr);
-        PermissionController controller = PermissionController(permissionController);
+        PermissionController controller = PermissionController(permissionControllerAddr);
 
         vm.startBroadcast(implPrivateKey);
 
         // Update registry coordinator with new registries
         eigenLayerMiddleware.addAdminToPermissionController(
-            proxyDeployer, permissionController
+            proxyDeployer, permissionControllerAddr
         );
         eigenLayerMiddleware.addAdminToPermissionController(
-            implDeployer, permissionController
+            implDeployer, permissionControllerAddr
         );
 
         vm.stopBroadcast();
@@ -128,9 +182,12 @@ contract SetRegistry is Script, Test {
         allocationManager.setAVSRegistrar(
             address(eigenLayerMiddleware), IAVSRegistrar(taiyiRegistryCoordinator)
         );
-        allocationManager.updateAVSMetadataURI(
-            address(eigenLayerMiddleware), "luban-local-test"
-        );
+
+        // Use the same metadata URI for all networks
+        string memory metadataURI =
+            "https://github.com/lu-bann/eigenlayer-metadata-uri/raw/67e76ca2b1c3344ce0a4b43fcff4b5f82b1b046a/metadata.json";
+
+        allocationManager.updateAVSMetadataURI(address(eigenLayerMiddleware), metadataURI);
         vm.stopBroadcast();
     }
 }
