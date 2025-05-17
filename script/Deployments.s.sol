@@ -84,7 +84,13 @@ contract Deploy is Script, Test {
         address admin;
     }
 
+    enum Network {
+        DEVNET,
+        HOLESKY,
+        HOODI
+    }
     // Proxies
+
     ProxyInfo internal registryCoordinatorInfo;
     ProxyInfo internal linglongSlasherInfo;
     ProxyInfo internal pubkeyRegistryInfo;
@@ -196,9 +202,9 @@ contract Deploy is Script, Test {
     }
 
     // Deploy implementation contracts and initialize them
+
     function deployImplementations() internal {
         string memory taiyiAddresses = "taiyiAddresses";
-
         // Deploy TaiyiRegistryCoordinator implementation and proxy
         TaiyiRegistryCoordinator registryCoordinatorImpl = new TaiyiRegistryCoordinator(
             IAllocationManager(allocationManager),
@@ -384,7 +390,7 @@ contract Deploy is Script, Test {
         vm.stopBroadcast();
     }
 
-    function setupHoleskyAddresses() internal {
+    function setupHoleskyAddresses(string memory taiyiAddresses) internal {
         // holesky address reference: https://github.com/Layr-Labs/eigenlayer-contracts/tree/testnet-holesky
         avsDirectory = 0x055733000064333CaDDbC92763c58BF0192fFeBf;
         delegationManager = 0xA44151489861Fe9e3055d95adC98FbD462B948e7;
@@ -392,9 +398,28 @@ contract Deploy is Script, Test {
         eigenPodManager = 0x30770d7E3e71112d7A6b7259542D1f680a70e315;
         rewardCoordinator = 0xAcc1fb458a1317E886dB376Fc8141540537E68fE;
         allocationManager = 0x78469728304326CBc65f8f95FA756B0B73164462;
-        permissionController = 0x0000000000000000000000000000000000000000;
+        permissionController = 0x598cb226B591155F767dA17AfE7A2241a68C5C10;
+        eigenPauserReg = 0x85Ef7299F8311B25642679edBF02B62FA2212F06;
         // TODO: update this
-        urc = 0x0000000000000000000000000000000000000000;
+        vm.startBroadcast();
+        IRegistry.Config memory registryConfig = IRegistry.Config({
+            minCollateralWei: SafeCast.toUint80(urcMinCollateral),
+            fraudProofWindow: 7200,
+            unregistrationDelay: 7200,
+            slashWindow: 7200,
+            optInDelay: 7200
+        });
+
+        Registry registry = new Registry(registryConfig);
+        emit log_address(address(registry));
+        urc = address(registry);
+        vm.serializeAddress(taiyiAddresses, "urc", address(registry));
+        vm.serializeUint(taiyiAddresses, "urcMinCollateral", urcMinCollateral);
+        vm.stopBroadcast();
+    }
+
+    function setupHoodiAddresses(string memory taiyiAddresses) internal {
+        revert("Hoodi is not supported yet");
     }
 
     function run(string memory configFileName, uint256 minCollateral) public {
@@ -404,18 +429,21 @@ contract Deploy is Script, Test {
         deployer = vm.addr(proxyDeployerPrivateKey);
         implOwner = vm.addr(implPrivateKey);
 
-        string memory network = vm.envString("NETWORK");
         string memory taiyiAddresses = "taiyiAddresses";
 
-        vm.createDir("script/output/devnet", true);
+        Network network = getNetwork();
+        string memory outputDir = getOutputDir(network);
 
-        if (keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("devnet")))
-        {
+        vm.createDir(outputDir, true);
+
+        if (network == Network.DEVNET) {
             setupDevnetAddresses(proxyDeployerPrivateKey, taiyiAddresses, configFileName);
-        } else if (
-            keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("holesky"))
-        ) {
-            setupHoleskyAddresses();
+        } else if (network == Network.HOLESKY) {
+            setupHoleskyAddresses(taiyiAddresses);
+        } else if (network == Network.HOODI) {
+            setupHoodiAddresses(taiyiAddresses);
+        } else {
+            revert("Invalid network");
         }
 
         rewardInitiator = address(0xd8F3183DEf51a987222d845Be228E0bBB932c292); // Arbitrary address
@@ -452,5 +480,31 @@ contract Deploy is Script, Test {
         implPrivateKey = vm.parseUint(implPkString); // Parse as hex
 
         return (proxyDeployerPrivateKey, implPrivateKey);
+    }
+
+    function getOutputDir(Network network) internal pure returns (string memory) {
+        if (network == Network.HOLESKY) {
+            return "script/output/holesky";
+        } else if (network == Network.HOODI) {
+            return "script/output/hoodi";
+        } else {
+            return "script/output/devnet";
+        }
+    }
+
+    function getNetwork() internal view returns (Network) {
+        string memory network = vm.envString("NETWORK");
+
+        if (
+            keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("holesky"))
+        ) {
+            return Network.HOLESKY;
+        } else if (
+            keccak256(abi.encodePacked(network)) == keccak256(abi.encodePacked("hoodi"))
+        ) {
+            return Network.HOODI;
+        } else {
+            return Network.DEVNET;
+        }
     }
 }
