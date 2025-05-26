@@ -15,7 +15,7 @@ LingLong is a flexible proposer commitment framework that enables Ethereum valid
 
 #### 1. Clone & install
 ```bash
-$ git clone https://github.com/luban/linglong.git
+$ git clone https://github.com/luban/linglong
 $ cd linglong && forge install
 ```
 
