@@ -110,7 +110,8 @@ contract SetupContract is Script, Test {
             allocationManagerAddr = 0x78469728304326CBc65f8f95FA756B0B73164462;
             wethStrategyAddr = 0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6;
         } else if (network == Network.HOODI) {
-            revert("Hoodi is not supported yet");
+            allocationManagerAddr = 0x95a7431400F362F3647a69535C5666cA0133CAA0;
+            wethStrategyAddr = 0x24579aD4fe83aC53546E5c2D3dF5F85D6383420d;
         } else {
             revert("Invalid network");
         }

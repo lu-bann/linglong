@@ -1,0 +1,24 @@
+{
+  "taiyiAddresses": {
+    "eigenLayerMiddleware": "0xa9f69A10e9550a644EDfC6A7D4c6702922184637",
+    "eigenLayerMiddlewareImpl": "0x56A653ee63aEB67e1B08e82Cbe939F78454FD153",
+    "eigenLayerMiddlewareProxyAdminAddress": "0x48AEDfa503e1EC8133273997143d5dD2167561Be",
+    "linglongSlasher": "0xee8EaB9E52487DEc60F6Ff2b4936157598000aCC",
+    "linglongSlasherImpl": "0x81eE9896c9CD444B0909f353E9f949c4c792DeFC",
+    "linglongSlasherProxyAdminAddress": "0x405F1Bb8A0fC4D7e78fdc12B96F35D8eF8420c13",
+    "pubkeyRegistry": "0xd1778f661Aa8FdCf299De2619d08F43C1FA37b0D",
+    "pubkeyRegistryImpl": "0x045887238694312E1Ff2f6dDBDA9D38912697422",
+    "pubkeyRegistryProxyAdminAddress": "0xC0991A5d3061335a67bC12165F576657A2BA0bc5",
+    "socketRegistry": "0xE311BA37335f32C042c3529ae852D859702E52e5",
+    "socketRegistryImpl": "0x785645d3018C7148Fdb6dcF5A6960e2149511f25",
+    "socketRegistryProxyAdminAddress": "0x2d144077be4E4c73a4CF2399e196160BE1593Ec9",
+    "taiyiCore": "0xb435AEfDef1a3D387f2f3FcD7FF2598eF6398EDF",
+    "taiyiCoreImpl": "0x5166b6054d66C28194891bCFf251f0C702cFeB62",
+    "taiyiCoreProxyAdminAddress": "0x6686B7290B921AAe47Cf7ECd8C0dE72cb52213bb",
+    "taiyiRegistryCoordinator": "0xd6E1b16215AF92f448c29Bf602E42748CB8Fc05f",
+    "taiyiRegistryCoordinatorImpl": "0x6E0646d1F7d394B393Ffda3b616c006352F2888d",
+    "taiyiRegistryCoordinatorProxyAdminAddress": "0x340896A16AdfdB14c6BaAc5F73EFB6FF3a532077",
+    "urc": "0x9a20dB6243De2f3827CEAd2371A5FAcB0eD546e5",
+    "urcMinCollateral": 10000000000000000
+  }
+}
