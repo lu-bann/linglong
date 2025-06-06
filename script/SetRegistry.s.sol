@@ -144,7 +144,9 @@ contract SetRegistry is Script, Test {
             allocationManagerAddr = 0x78469728304326CBc65f8f95FA756B0B73164462;
             permissionControllerAddr = 0x598cb226B591155F767dA17AfE7A2241a68C5C10;
         } else if (network == Network.HOODI) {
-            revert("Hoodi is not supported yet");
+            // Use hardcoded addresses for Holesky and Hoodi
+            allocationManagerAddr = 0x95a7431400F362F3647a69535C5666cA0133CAA0;
+            permissionControllerAddr = 0xdcCF401fD121d8C542E96BC1d0078884422aFAD2;
         } else {
             revert("Invalid network");
         }

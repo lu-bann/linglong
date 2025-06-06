@@ -419,7 +419,31 @@ contract Deploy is Script, Test {
     }
 
     function setupHoodiAddresses(string memory taiyiAddresses) internal {
-        revert("Hoodi is not supported yet");
+        // holesky address reference: https://github.com/Layr-Labs/eigenlayer-contracts/tree/testnet-holesky
+        avsDirectory = 0xD58f6844f79eB1fbd9f7091d05f7cb30d3363926;
+        delegationManager = 0x867837a9722C512e0862d8c2E15b8bE220E8b87d;
+        strategyManagerAddr = 0xeE45e76ddbEDdA2918b8C7E3035cd37Eab3b5D41;
+        eigenPodManager = 0xcd1442415Fc5C29Aa848A49d2e232720BE07976c;
+        rewardCoordinator = 0x29e8572678e0c272350aa0b4B8f304E47EBcd5e7;
+        allocationManager = 0x95a7431400F362F3647a69535C5666cA0133CAA0;
+        permissionController = 0xdcCF401fD121d8C542E96BC1d0078884422aFAD2;
+        eigenPauserReg = 0x64D78399B0fa32EA72959f33edCF313159F3c13D;
+        // TODO: update this
+        vm.startBroadcast();
+        IRegistry.Config memory registryConfig = IRegistry.Config({
+            minCollateralWei: SafeCast.toUint80(urcMinCollateral),
+            fraudProofWindow: 7200,
+            unregistrationDelay: 7200,
+            slashWindow: 7200,
+            optInDelay: 7200
+        });
+
+        Registry registry = new Registry(registryConfig);
+        emit log_address(address(registry));
+        urc = address(registry);
+        vm.serializeAddress(taiyiAddresses, "urc", address(registry));
+        vm.serializeUint(taiyiAddresses, "urcMinCollateral", urcMinCollateral);
+        vm.stopBroadcast();
     }
 
     function run(string memory configFileName, uint256 minCollateral) public {
