@@ -39,7 +39,9 @@ contract TaiyiCore is
 
     event Exhausted(address indexed preconfer, uint256 amount);
     event TipCollected(uint256 amount, bytes32 preconfRequestHash);
-    event TransactionExecutionFailed(address to, uint256 value);
+    event PreconfRequestExecuted(bytes32 indexed preconfRequestHash, uint256 tipAmount);
+    event TipReceived(bytes32 indexed preconfRequestHash, uint256 amount);
+    event EthSponsored(address indexed recipient, uint256 amount);
 
     ///////////////////////////////////////////////////////////////
     /// CONSTRUCTOR
@@ -150,6 +152,7 @@ contract TaiyiCore is
         for (uint256 i = 0; i < recipients.length; i++) {
             (bool success,) = recipients[i].call{ value: amounts[i] }("");
             require(success, "ETH transfer failed");
+            emit EthSponsored(recipients[i], amounts[i]);
         }
     }
 
@@ -206,6 +209,7 @@ contract TaiyiCore is
     /// @param preconfRequestHash The hash of the PreconfRequest
     function _handlePayment(uint256 amount, bytes32 preconfRequestHash) internal {
         preconferTips[preconfRequestHash] += amount;
+        emit TipReceived(preconfRequestHash, amount);
     }
 
     /// @notice Processes and validates a tip payment for a preconfirmation request
@@ -223,11 +227,13 @@ contract TaiyiCore is
         _validatePreconfRequestBType(preconfRequestBType);
 
         uint256 amount = payout(preconfRequestBType.blockspaceAllocation, true);
-        _handlePayment(amount, preconfRequestBType.getPreconfRequestBTypeHash());
+        bytes32 requestHash = preconfRequestBType.getPreconfRequestBTypeHash();
+        _handlePayment(amount, requestHash);
 
-        preconfRequestStatus[preconfRequestBType.getPreconfRequestBTypeHash()] =
-            PreconfRequestStatus.Executed;
-        inclusionStatusMap[preconfRequestBType.getPreconfRequestBTypeHash()] = true;
+        preconfRequestStatus[requestHash] = PreconfRequestStatus.Executed;
+        inclusionStatusMap[requestHash] = true;
+
+        emit PreconfRequestExecuted(requestHash, amount);
     }
 
     /// @notice Exhausts a preconfirmation request by burning gas and handling payment
