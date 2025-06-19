@@ -98,20 +98,6 @@ interface ITaiyiRegistryCoordinator {
         RestakingProtocol restakingProtocol, address newMiddleware
     );
 
-    /// @notice Emitted when an allocation query is performed
-    /// @param operator The operator queried
-    /// @param operatorSetId The operator set ID
-    /// @param strategy The strategy address
-    /// @param amount The allocation amount
-    /// @param reason A description of the allocation status
-    event OperatorAllocationQuery(
-        address indexed operator,
-        uint96 indexed operatorSetId,
-        address indexed strategy,
-        uint256 amount,
-        string reason
-    );
-
     /// @notice Emitted when an operator's socket is updated
     /// @param operatorId The operator's unique identifier
     /// @param socket The new socket value

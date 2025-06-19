@@ -93,6 +93,22 @@ contract EigenLayerMiddleware is
     /// @notice Thrown when a function requiring the rewards handler is called but it's not set
     error RewardsHandlerNotSet();
 
+    event RewardsInitiatorSet(address indexed oldInitiator, address indexed newInitiator);
+    event ValidatorsRegistered(
+        address indexed operator, bytes32 indexed registrationRoot
+    );
+    event ValidatorsUnregistered(
+        address indexed operator, bytes32 indexed registrationRoot
+    );
+    event DelegationsBatchSet(
+        address indexed operator, bytes32 indexed registrationRoot, uint256 count
+    );
+    event SlasherOptedIn(
+        address indexed operator,
+        bytes32 indexed registrationRoot,
+        address indexed delegatee
+    );
+
     // ==============================================================================================
     // ================================= MODIFIERS =================================================
     // ==============================================================================================
@@ -236,9 +252,12 @@ contract EigenLayerMiddleware is
                 EigenLayerMiddlewareLib
                 .OperatorIsNotYetRegisteredInValidatorOperatorSet();
         }
-        return EigenLayerMiddlewareLib.registerValidators(
+        bytes32 registrationRoot = EigenLayerMiddlewareLib.registerValidators(
             REGISTRY, registrations, REGISTRATION_MIN_COLLATERAL
         );
+
+        emit ValidatorsRegistered(msg.sender, registrationRoot);
+        return registrationRoot;
     }
 
     /// @notice Executes slashing for an operator through the EigenLayer allocation manager
@@ -272,6 +291,8 @@ contract EigenLayerMiddleware is
         delete operatorDelegations[msg.sender][registrationRoot];
         operatorRegistrationRoots[msg.sender].remove(registrationRoot);
         EigenLayerMiddlewareLib.unregisterValidators(REGISTRY, registrationRoot);
+
+        emit ValidatorsUnregistered(msg.sender, registrationRoot);
     }
 
     /// @notice Updates delegations for validators under a registration root
@@ -295,6 +316,8 @@ contract EigenLayerMiddleware is
             pubkeys,
             delegations
         );
+
+        emit DelegationsBatchSet(msg.sender, registrationRoot, pubkeys.length);
     }
 
     /// @notice Creates an operator set with the given strategies
@@ -385,6 +408,8 @@ contract EigenLayerMiddleware is
             address(msg.sender),
             params
         );
+
+        emit SlasherOptedIn(msg.sender, registrationRoot, delegateeAddress);
     }
 
     /// @notice Processes a reward claim from the rewards merkle tree
@@ -677,7 +702,9 @@ contract EigenLayerMiddleware is
     /// @notice Internal function to set the rewards initiator
     /// @param newRewardsInitiator Address of the new rewards initiator
     function _setRewardsInitiator(address newRewardsInitiator) internal {
+        address oldInitiator = REWARD_INITIATOR;
         REWARD_INITIATOR = newRewardsInitiator;
+        emit RewardsInitiatorSet(oldInitiator, newRewardsInitiator);
     }
 
     /// @notice Constructs delegation parameters

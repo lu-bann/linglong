@@ -111,5 +111,6 @@ abstract contract TaiyiEscrow is
             : blockspaceAllocation.deposit;
         require(balances[blockspaceAllocation.sender] >= amount, "Insufficient balance");
         balances[blockspaceAllocation.sender] -= amount;
+        emit PaymentMade(blockspaceAllocation.sender, amount, isAfterExec);
     }
 }
