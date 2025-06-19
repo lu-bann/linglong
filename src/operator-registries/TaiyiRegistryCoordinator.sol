@@ -70,6 +70,28 @@ contract TaiyiRegistryCoordinator is
     using SafeCast96To32Lib for uint32[];
 
     // ==============================================================================================
+    // ================================= EVENTS =================================================
+    // ==============================================================================================
+    event OperatorRegistered(
+        address indexed operator, bytes32 indexed operatorId, uint32[] linglongSubsetIds
+    );
+    event OperatorDeregistered(
+        address indexed operator, bytes32 indexed operatorId, uint32[] linglongSubsetIds
+    );
+    event OperatorStatusChanged(
+        address indexed operator, OperatorStatus previousStatus, OperatorStatus newStatus
+    );
+    event LinglongSubsetCreated(uint32 indexed linglongSubsetId, uint256 minStake);
+    event OperatorAddedToSubset(
+        address indexed operator, uint32 indexed linglongSubsetId
+    );
+    event OperatorRemovedFromSubset(
+        address indexed operator, uint32 indexed linglongSubsetId
+    );
+    event SocketRegistryUpdated(address indexed oldRegistry, address indexed newRegistry);
+    event PubkeyRegistryUpdated(address indexed oldRegistry, address indexed newRegistry);
+
+    // ==============================================================================================
     // ================================= MODIFIERS =================================================
     // ==============================================================================================
 
@@ -215,6 +237,7 @@ contract TaiyiRegistryCoordinator is
         onlyMiddleware
     {
         _linglongSubsets.createLinglongSubset(linglongSubsetId, minStake);
+        emit LinglongSubsetCreated(linglongSubsetId, minStake);
     }
 
     // ==============================================================================================
@@ -225,14 +248,18 @@ contract TaiyiRegistryCoordinator is
     /// @param _socketRegistry New socket registry address
     function updateSocketRegistry(address _socketRegistry) external onlyOwner {
         require(_socketRegistry != address(0), "Socket registry cannot be zero address");
+        address oldRegistry = address(socketRegistry);
         socketRegistry = ISocketRegistry(_socketRegistry);
+        emit SocketRegistryUpdated(oldRegistry, _socketRegistry);
     }
 
     /// @notice Updates the pubkey registry address
     /// @param _pubkeyRegistry New pubkey registry address
     function updatePubkeyRegistry(address _pubkeyRegistry) external onlyOwner {
         require(_pubkeyRegistry != address(0), "Pubkey registry cannot be zero address");
+        address oldRegistry = address(pubkeyRegistry);
         pubkeyRegistry = IPubkeyRegistry(_pubkeyRegistry);
+        emit PubkeyRegistryUpdated(oldRegistry, _pubkeyRegistry);
     }
 
     /// @notice Sets the protocol type for a middleware address
@@ -465,39 +492,19 @@ contract TaiyiRegistryCoordinator is
         address strategyAddress = address(strategy);
 
         if (collateralTokens.length == 0) {
-            emit OperatorAllocationQuery(
-                operator, linglongSubsetId, address(strategy), 0, "No collaterals found"
-            );
             return 0;
         }
 
         for (uint256 i = 0; i < collateralTokens.length; i++) {
             if (collateralTokens[i] == strategyAddress) {
                 if (stakedAmounts[i] > 0) {
-                    emit OperatorAllocationQuery(
-                        operator,
-                        linglongSubsetId,
-                        address(strategy),
-                        stakedAmounts[i],
-                        "Allocation found"
-                    );
                     return stakedAmounts[i];
                 } else {
-                    emit OperatorAllocationQuery(
-                        operator,
-                        linglongSubsetId,
-                        address(strategy),
-                        0,
-                        "Zero allocation"
-                    );
                     return 0;
                 }
             }
         }
 
-        emit OperatorAllocationQuery(
-            operator, linglongSubsetId, address(strategy), 0, "Strategy not found"
-        );
         return 0;
     }
 
@@ -519,17 +526,6 @@ contract TaiyiRegistryCoordinator is
             OperatorSet({ avs: eigenLayerMiddleware, id: linglongSubsetId });
         IAllocationManagerTypes.Allocation memory allocation =
             allocationManager.getAllocation(operator, operatorSet, strategy);
-
-        emit OperatorAllocationQuery(
-            operator,
-            linglongSubsetId,
-            address(strategy),
-            allocation.currentMagnitude,
-            allocation.effectBlock >= block.number
-                ? "Confirmed allocation"
-                : "Unconfirmed allocation"
-        );
-
         return allocation.currentMagnitude;
     }
 
@@ -672,6 +668,7 @@ contract TaiyiRegistryCoordinator is
         internal
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
+        OperatorStatus previousStatus = operatorInfo.status;
         bool operatorRegisteredBefore =
             _operatorInfo[operator].status == OperatorStatus.REGISTERED;
 
@@ -708,6 +705,14 @@ contract TaiyiRegistryCoordinator is
         }
 
         _linglongSubsets.addOperatorToLinglongSubsets(_linglongSubsetIds, operator);
+
+        // Emit registration event
+        emit OperatorRegistered(operator, operatorId, _linglongSubsetIds);
+
+        // Emit events for each subset the operator was added to
+        for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
+            emit OperatorAddedToSubset(operator, _linglongSubsetIds[i]);
+        }
     }
 
     /// @notice Deregisters an operator from the EigenLayer protocol
@@ -723,6 +728,9 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
+        OperatorStatus previousStatus = operatorInfo.status;
+        bytes32 operatorId = operatorInfo.operatorId;
+
         for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
             require(
                 OperatorSubsetLib.isEigenlayerProtocolID(_linglongSubsetIds[i]),
@@ -731,6 +739,12 @@ contract TaiyiRegistryCoordinator is
         }
 
         _linglongSubsets.removeOperatorFromLinglongSubsets(_linglongSubsetIds, operator);
+
+        // Emit events for each subset the operator was removed from
+        for (uint256 i = 0; i < _linglongSubsetIds.length; i++) {
+            emit OperatorRemovedFromSubset(operator, _linglongSubsetIds[i]);
+        }
+
         // Check if the operator is still in any Linglong subset
         bool stillInAnySubset = false;
         uint256[] memory allSubsetIds = _linglongSubsets.linglongSubsetIds.values();
@@ -745,7 +759,12 @@ contract TaiyiRegistryCoordinator is
         // Only set status to DEREGISTERED if not in any subset
         if (!stillInAnySubset) {
             operatorInfo.status = OperatorStatus.DEREGISTERED;
+            emit OperatorStatusChanged(
+                operator, previousStatus, OperatorStatus.DEREGISTERED
+            );
         }
+
+        emit OperatorDeregistered(operator, operatorId, _linglongSubsetIds);
     }
 
     /// @notice Registers an operator for the Symbiotic protocol
@@ -758,11 +777,14 @@ contract TaiyiRegistryCoordinator is
         internal
     {
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
+        OperatorStatus previousStatus = operatorInfo.status;
         require(
             operatorInfo.status != OperatorStatus.REGISTERED, OperatorAlreadyRegistered()
         );
 
         _operatorInfo[operator].status = OperatorStatus.REGISTERED;
+        emit OperatorStatusChanged(operator, previousStatus, OperatorStatus.REGISTERED);
+
         for (uint256 i = 0; i < linglongSubsetIds.length; i++) {
             require(
                 OperatorSubsetLib.isSymbioticProtocolID(linglongSubsetIds[i]),
@@ -771,6 +793,14 @@ contract TaiyiRegistryCoordinator is
         }
 
         _linglongSubsets.addOperatorToLinglongSubsets(linglongSubsetIds, operator);
+
+        // Emit registration event
+        emit OperatorRegistered(operator, operatorInfo.operatorId, linglongSubsetIds);
+
+        // Emit events for each subset the operator was added to
+        for (uint256 i = 0; i < linglongSubsetIds.length; i++) {
+            emit OperatorAddedToSubset(operator, linglongSubsetIds[i]);
+        }
     }
 
     /// @notice Deregisters an operator from the Symbiotic protocol
@@ -779,11 +809,19 @@ contract TaiyiRegistryCoordinator is
         OperatorInfo storage operatorInfo = _operatorInfo[operator];
         require(operatorInfo.status == OperatorStatus.REGISTERED, OperatorNotRegistered());
 
+        OperatorStatus previousStatus = operatorInfo.status;
+        bytes32 operatorId = operatorInfo.operatorId;
+
         uint32[] memory linglongSubsetIds = new uint32[](2);
         linglongSubsetIds[0] = OperatorSubsetLib.SYMBIOTIC_VALIDATOR_SUBSET_ID;
         linglongSubsetIds[1] = OperatorSubsetLib.SYMBIOTIC_UNDERWRITER_SUBSET_ID;
 
         _linglongSubsets.removeOperatorFromLinglongSubsets(linglongSubsetIds, operator);
+
+        // Emit events for each subset the operator was removed from
+        for (uint256 i = 0; i < linglongSubsetIds.length; i++) {
+            emit OperatorRemovedFromSubset(operator, linglongSubsetIds[i]);
+        }
 
         // Check if the operator is still in any Linglong subset
         bool stillInAnySubset = false;
@@ -799,7 +837,12 @@ contract TaiyiRegistryCoordinator is
         // Only set status to DEREGISTERED if not in any subset
         if (!stillInAnySubset) {
             operatorInfo.status = OperatorStatus.DEREGISTERED;
+            emit OperatorStatusChanged(
+                operator, previousStatus, OperatorStatus.DEREGISTERED
+            );
         }
+
+        emit OperatorDeregistered(operator, operatorId, linglongSubsetIds);
     }
 
     /// @notice Checks the initial EigenLayer stake for an operator
