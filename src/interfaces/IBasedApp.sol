@@ -1,21 +1,18 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.27;
 
-/// @title IBasedAppCompat
-/// @notice Compatible interface for SSV-based applications (compatible with Solidity 0.8.27)
-/// @dev This interface provides compatibility with SSV's IBasedApp without requiring Solidity 0.8.30
-interface IBasedAppCompat {
-    /// @notice Token configuration struct
-    struct TokenConfig {
-        address token;
-        uint32 sharedRiskLevel;
-    }
+import { IBasedAppManager } from "./IBasedAppManager.sol";
 
+/// @title IBasedApp
+/// @notice SSV IBasedApp interface (compatible with Solidity 0.8.27)
+/// @dev Based on: https://github.com/ssvlabs/based-applications/blob/main/src/middleware/interfaces/IBasedApp.sol
+/// Note: Due to version incompatibility (SSV uses 0.8.30, we use 0.8.27), we recreate the interface
+interface IBasedApp {
     /// @notice Registers the bApp with SSV network
     /// @param tokenConfigs Array of token configurations for the bApp
     /// @param metadataURI Metadata URI for the bApp
     function registerBApp(
-        TokenConfig[] calldata tokenConfigs,
+        IBasedAppManager.TokenConfig[] calldata tokenConfigs,
         string calldata metadataURI
     )
         external;
@@ -60,7 +57,8 @@ interface IBasedAppCompat {
 
     /// @notice Updates the token configurations for the bApp
     /// @param tokenConfigs New token configurations
-    function updateBAppTokens(TokenConfig[] calldata tokenConfigs) external;
+    function updateBAppTokens(IBasedAppManager.TokenConfig[] calldata tokenConfigs)
+        external;
 
     /// @notice Error thrown when an unauthorized caller attempts to access a restricted function
     error UnauthorizedCaller();

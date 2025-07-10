@@ -9,6 +9,9 @@ import { ReentrancyGuardUpgradeable } from
     "@openzeppelin-contracts-upgradeable/contracts/utils/ReentrancyGuardUpgradeable.sol";
 
 import { IERC20 } from "@openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
+import { IERC165 } from
+    "@openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import { EnumerableSet } from
     "@openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
 
@@ -16,7 +19,8 @@ import { ILinglongSlasher } from "../interfaces/ILinglongSlasher.sol";
 import { ISsvBasedAppMiddleware } from "../interfaces/ISsvBasedAppMiddleware.sol";
 import { ITaiyiRegistryCoordinator } from "../interfaces/ITaiyiRegistryCoordinator.sol";
 
-import { IBasedAppCompat } from "../interfaces/IBasedAppCompat.sol";
+import { IBasedApp } from "../interfaces/IBasedApp.sol";
+import { IBasedAppManager } from "../interfaces/IBasedAppManager.sol";
 
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
@@ -35,7 +39,7 @@ contract SSVBasedAppMiddleware is
     OwnableUpgradeable,
     UUPSUpgradeable,
     ReentrancyGuardUpgradeable,
-    IBasedAppCompat,
+    IBasedApp,
     ISsvBasedAppMiddleware,
     SSVBasedAppMiddlewareStorage
 {
@@ -48,9 +52,9 @@ contract SSVBasedAppMiddleware is
     // ==============================================================================================
 
     event StateChanged(string newState);
-    event BAppRegistered(string metadataURI, IBasedAppCompat.TokenConfig[] tokenConfigs);
+    event BAppRegistered(string metadataURI, IBasedAppManager.TokenConfig[] tokenConfigs);
     event BAppMetadataUpdated(string metadataURI);
-    event BAppTokensUpdated(IBasedAppCompat.TokenConfig[] tokenConfigs);
+    event BAppTokensUpdated(IBasedAppManager.TokenConfig[] tokenConfigs);
     event OperatorOptedIn(address indexed operator, uint32 indexed strategyId);
     event ValidatorSlashed(
         uint32 indexed strategyId,
@@ -58,6 +62,8 @@ contract SSVBasedAppMiddleware is
         uint32 percentage,
         address indexed sender
     );
+    event OperatorRegistered(address indexed operator, bytes operatorData);
+    event OperatorDeregistered(address indexed operator);
 
     // ==============================================================================================
     // ================================= MODIFIERS =================================================
@@ -110,6 +116,7 @@ contract SSVBasedAppMiddleware is
         GATEWAY_OPERATOR_SET = _config.gatewayOperatorSet;
         GATEWAY_NETWORK = _config.gatewayNetwork;
         REGISTRATION_MIN_COLLATERAL = _config.registrationMinCollateral;
+        SSV_BASED_APPS_NETWORK = _config.ssvBasedAppsNetwork;
 
         emit StateChanged("Initialized");
     }
@@ -122,13 +129,20 @@ contract SSVBasedAppMiddleware is
     /// @param tokenConfigs Array of token configurations for the bApp
     /// @param metadataURI Metadata URI for the bApp
     function registerBApp(
-        IBasedAppCompat.TokenConfig[] calldata tokenConfigs,
+        IBasedAppManager.TokenConfig[] calldata tokenConfigs,
         string calldata metadataURI
     )
         external
-        override
+        override(IBasedApp, ISsvBasedAppMiddleware)
         onlyOwner
     {
+        // Call SSV Based App Manager if address is set
+        if (SSV_BASED_APPS_NETWORK != address(0)) {
+            IBasedAppManager(SSV_BASED_APPS_NETWORK).registerBApp(
+                tokenConfigs, metadataURI
+            );
+        }
+
         emit BAppRegistered(metadataURI, tokenConfigs);
         emit StateChanged("BApp Registered");
     }
@@ -137,7 +151,7 @@ contract SSVBasedAppMiddleware is
     /// @param strategyId The strategy ID to opt into
     /// @param tokens Array of token addresses
     /// @param obligationPercentages Array of obligation percentages for each token
-    /// @param data Additional data for the opt-in process
+    /// @param data Additional data for the opt-in process (includes operator registration data if needed)
     /// @return success Whether the opt-in was successful
     function optInToBApp(
         uint32 strategyId,
@@ -146,19 +160,31 @@ contract SSVBasedAppMiddleware is
         bytes calldata data
     )
         external
-        override
-        onlySSVValidatorOperatorSet
+        override(IBasedApp, ISsvBasedAppMiddleware)
         returns (bool success)
     {
         require(tokens.length == obligationPercentages.length, "Array length mismatch");
 
-        // The operator registration should be handled externally through the registry coordinator
-        // This function just validates that the operator is already registered in the SSV validator subset
-        require(
-            REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
-                OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID, msg.sender
-            ),
-            "Operator not registered in SSV validator subset"
+        // Check if operator is registered, if not, try to register them if data is provided
+        bool isRegistered = REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+            OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID, msg.sender
+        );
+
+        if (!isRegistered) {
+            // If no data provided, fail with the expected error
+            if (data.length == 0) {
+                revert
+                    SSVBasedAppMiddlewareLib
+                    .OperatorIsNotYetRegisteredInValidatorOperatorSet();
+            }
+
+            // Register operator using the internal function
+            _registerOperator(msg.sender, data);
+        }
+
+        // Validate operator is now registered (either was already or just registered)
+        SSVBasedAppMiddlewareLib.validateOperatorRegistration(
+            REGISTRY_COORDINATOR, msg.sender
         );
 
         emit OperatorOptedIn(msg.sender, strategyId);
@@ -169,20 +195,30 @@ contract SSVBasedAppMiddleware is
     /// @param metadataURI New metadata URI
     function updateBAppMetadataURI(string calldata metadataURI)
         external
-        override
+        override(IBasedApp, ISsvBasedAppMiddleware)
         onlyOwner
     {
+        // Call SSV Based App Manager if address is set
+        if (SSV_BASED_APPS_NETWORK != address(0)) {
+            IBasedAppManager(SSV_BASED_APPS_NETWORK).updateBAppMetadataURI(metadataURI);
+        }
+
         emit BAppMetadataUpdated(metadataURI);
         emit StateChanged("Metadata Updated");
     }
 
     /// @notice Updates the token configurations for the bApp
     /// @param tokenConfigs New token configurations
-    function updateBAppTokens(IBasedAppCompat.TokenConfig[] calldata tokenConfigs)
+    function updateBAppTokens(IBasedAppManager.TokenConfig[] calldata tokenConfigs)
         external
-        override
+        override(IBasedApp, ISsvBasedAppMiddleware)
         onlyOwner
     {
+        // Call SSV Based App Manager if address is set
+        if (SSV_BASED_APPS_NETWORK != address(0)) {
+            IBasedAppManager(SSV_BASED_APPS_NETWORK).updateBAppsTokens(tokenConfigs);
+        }
+
         emit BAppTokensUpdated(tokenConfigs);
         emit StateChanged("Tokens Updated");
     }
@@ -204,7 +240,7 @@ contract SSVBasedAppMiddleware is
         bytes calldata data
     )
         external
-        override
+        override(IBasedApp, ISsvBasedAppMiddleware)
         returns (bool success, address receiver, bool exit)
     {
         // Only the designated slasher can call this function
@@ -212,10 +248,81 @@ contract SSVBasedAppMiddleware is
             revert SSVBasedAppMiddlewareLib.OnlySlasher();
         }
 
+        // TODO: Implement proper slashing logic
+
         emit ValidatorSlashed(strategyId, token, percentage, sender);
 
-        // For this implementation, we don't force exit and return the slasher as receiver
+        // Placeholder implementation - return basic values
         return (true, SLASHER, false);
+    }
+
+    // ==============================================================================================
+    // ================================= OPERATOR REGISTRATION ====================================
+    // ==============================================================================================
+
+    /// @notice Registers an operator with the SSV validator subset
+    /// @param operatorData Operator registration data (e.g., public key, metadata)
+    /// @return success Whether the registration was successful
+    function registerOperator(bytes calldata operatorData)
+        external
+        returns (bool success)
+    {
+        return _registerOperator(msg.sender, operatorData);
+    }
+
+    /// @notice Internal function to register an operator
+    /// @param operator The operator address to register
+    /// @param operatorData Operator registration data
+    /// @return success Whether the registration was successful
+    function _registerOperator(
+        address operator,
+        bytes calldata operatorData
+    )
+        internal
+        returns (bool success)
+    {
+        // Check if operator is already registered
+        bool isRegistered = REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+            OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID, operator
+        );
+
+        if (isRegistered) {
+            return true; // Already registered, nothing to do
+        }
+
+        // Create operator set IDs array with SSV validator subset ID
+        uint32[] memory operatorSetIds = new uint32[](1);
+        operatorSetIds[0] = OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID;
+
+        // Register operator with the registry coordinator
+        REGISTRY_COORDINATOR.registerOperator(
+            operator, address(this), operatorSetIds, operatorData
+        );
+
+        emit OperatorRegistered(operator, operatorData);
+        return true;
+    }
+
+    /// @notice Deregisters an operator from the SSV validator subset
+    /// @return success Whether the deregistration was successful
+    function deregisterOperator() external returns (bool success) {
+        // Check if operator is registered
+        require(
+            REGISTRY_COORDINATOR.isOperatorInLinglongSubset(
+                OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID, msg.sender
+            ),
+            "Operator not registered"
+        );
+
+        // Create operator set IDs array with SSV validator subset ID
+        uint32[] memory operatorSetIds = new uint32[](1);
+        operatorSetIds[0] = OperatorSubsetLib.SSV_VALIDATOR_SUBSET_ID;
+
+        // Deregister operator from the registry coordinator
+        REGISTRY_COORDINATOR.deregisterOperator(msg.sender, address(this), operatorSetIds);
+
+        emit OperatorDeregistered(msg.sender);
+        return true;
     }
 
     // ==============================================================================================
@@ -261,7 +368,7 @@ contract SSVBasedAppMiddleware is
         emit ValidatorsUnregistered(msg.sender, registrationRoot);
     }
 
-    /// @notice Opts into gateway delegation for SSV network
+    /// @notice Opts into gateway delegation for validators
     /// @param params Gateway delegation parameters
     function optInToGatewayDelegation(GatewayDelegationParams calldata params)
         external
@@ -357,6 +464,19 @@ contract SSVBasedAppMiddleware is
         );
 
         emit SlasherOptedIn(msg.sender, registrationRoot, delegateeAddress);
+    }
+
+    // ==============================================================================================
+    // ================================= ERC165 IMPLEMENTATION ====================================
+    // ==============================================================================================
+
+    /// @notice Checks if the contract implements a specific interface
+    /// @param interfaceId The interface identifier to check
+    /// @return True if the interface is supported
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IBasedApp).interfaceId
+            || interfaceId == type(ISsvBasedAppMiddleware).interfaceId
+            || interfaceId == type(IERC165).interfaceId;
     }
 
     // ==============================================================================================

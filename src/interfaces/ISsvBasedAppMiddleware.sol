@@ -1,16 +1,20 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.27;
 
-import { IBasedAppCompat } from "./IBasedAppCompat.sol";
+import { IBasedApp } from "./IBasedApp.sol";
+import { IBasedAppManager } from "./IBasedAppManager.sol";
 import { ITaiyiRegistryCoordinator } from "./ITaiyiRegistryCoordinator.sol";
+import { IERC165 } from
+    "@openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
 import { IRegistry } from "@urc/IRegistry.sol";
 import { ISlasher } from "@urc/ISlasher.sol";
 import { BLS } from "@urc/lib/BLS.sol";
 
 /// @title ISsvBasedAppMiddleware
-/// @notice Interface for SSV-based application middleware integration with Linglong
-/// @dev Defines the required functions for SSV-based restaking protocol integration
-interface ISsvBasedAppMiddleware {
+/// @notice Interface for SSV-based application middleware (compatible with Solidity 0.8.27)
+/// @dev Based on: https://github.com/ssvlabs/based-applications/blob/main/src/middleware/interfaces/IBasedApp.sol
+/// Extended with additional SSV-specific functionality for Linglong integration
+interface ISsvBasedAppMiddleware is IERC165 {
     // ==============================================================================================
     // ================================= STRUCTS ===================================================
     // ==============================================================================================
@@ -23,6 +27,7 @@ interface ISsvBasedAppMiddleware {
         address gatewayOperatorSet;
         address gatewayNetwork;
         uint256 registrationMinCollateral;
+        address ssvBasedAppsNetwork;
     }
 
     /// @notice Parameters for gateway delegation
@@ -34,40 +39,63 @@ interface ISsvBasedAppMiddleware {
     }
 
     // ==============================================================================================
-    // ================================= EVENTS ====================================================
+    // ================================= CORE BASEDAPP FUNCTIONS (from canonical IBasedApp) =======
     // ==============================================================================================
 
-    /// @notice Emitted when validators are registered with SSV network
-    event ValidatorsRegistered(
-        address indexed operator, bytes32 indexed registrationRoot
-    );
+    /// @notice Allows operators to opt into the bApp
+    /// @param strategyId The strategy ID to opt into
+    /// @param tokens Array of token addresses
+    /// @param obligationPercentages Array of obligation percentages for each token
+    /// @param data Additional data for the opt-in process
+    /// @return success Whether the opt-in was successful
+    function optInToBApp(
+        uint32 strategyId,
+        address[] calldata tokens,
+        uint32[] calldata obligationPercentages,
+        bytes calldata data
+    )
+        external
+        returns (bool success);
 
-    /// @notice Emitted when validators are unregistered from SSV network
-    event ValidatorsUnregistered(
-        address indexed operator, bytes32 indexed registrationRoot
-    );
+    /// @notice Registers the bApp
+    /// @param tokenConfigs Array of token configurations for the bApp
+    /// @param metadataURI Metadata URI for the bApp
+    function registerBApp(
+        IBasedAppManager.TokenConfig[] calldata tokenConfigs,
+        string calldata metadataURI
+    )
+        external;
 
-    /// @notice Emitted when operator opts into gateway delegation
-    event GatewayDelegationOptedIn(
-        address indexed operator,
-        address indexed gatewayOperator,
-        address indexed gatewayNetwork
-    );
+    /// @notice Handles slashing for the bApp
+    /// @param strategyId The strategy ID being slashed
+    /// @param token The token being slashed
+    /// @param percentage The slashing percentage
+    /// @param sender The address initiating the slash
+    /// @param data Additional slashing data
+    /// @return success Whether the slash was successful
+    /// @return receiver The address receiving slashed funds
+    /// @return exit Whether the validator should exit
+    function slash(
+        uint32 strategyId,
+        address token,
+        uint32 percentage,
+        address sender,
+        bytes calldata data
+    )
+        external
+        returns (bool success, address receiver, bool exit);
 
-    /// @notice Emitted when delegations are batch set
-    event DelegationsBatchSet(
-        address indexed operator, bytes32 indexed registrationRoot, uint256 count
-    );
+    /// @notice Updates the metadata URI for the bApp
+    /// @param metadataURI New metadata URI
+    function updateBAppMetadataURI(string calldata metadataURI) external;
 
-    /// @notice Emitted when slasher is opted into
-    event SlasherOptedIn(
-        address indexed operator,
-        bytes32 indexed registrationRoot,
-        address indexed delegatee
-    );
+    /// @notice Updates the token configurations for the bApp
+    /// @param tokenConfigs New token configurations
+    function updateBAppTokens(IBasedAppManager.TokenConfig[] calldata tokenConfigs)
+        external;
 
     // ==============================================================================================
-    // ================================= FUNCTIONS ==================================================
+    // ================================= SSV-SPECIFIC FUNCTIONS ===================================
     // ==============================================================================================
 
     /// @notice Registers validators with the SSV network
@@ -114,6 +142,10 @@ interface ISsvBasedAppMiddleware {
     )
         external;
 
+    // ==============================================================================================
+    // ================================= VIEW FUNCTIONS ============================================
+    // ==============================================================================================
+
     /// @notice Gets all registration roots for an operator
     /// @param operator The operator address
     /// @return Array of registration roots
@@ -149,4 +181,43 @@ interface ISsvBasedAppMiddleware {
     /// @notice Gets the gateway network address
     /// @return Gateway network address
     function getGatewayNetwork() external view returns (address);
+
+    // ==============================================================================================
+    // ================================= EVENTS ====================================================
+    // ==============================================================================================
+
+    /// @notice Emitted when validators are registered with SSV network
+    event ValidatorsRegistered(
+        address indexed operator, bytes32 indexed registrationRoot
+    );
+
+    /// @notice Emitted when validators are unregistered from SSV network
+    event ValidatorsUnregistered(
+        address indexed operator, bytes32 indexed registrationRoot
+    );
+
+    /// @notice Emitted when operator opts into gateway delegation
+    event GatewayDelegationOptedIn(
+        address indexed operator,
+        address indexed gatewayOperator,
+        address indexed gatewayNetwork
+    );
+
+    /// @notice Emitted when delegations are batch set
+    event DelegationsBatchSet(
+        address indexed operator, bytes32 indexed registrationRoot, uint256 count
+    );
+
+    /// @notice Emitted when slasher is opted into
+    event SlasherOptedIn(
+        address indexed operator,
+        bytes32 indexed registrationRoot,
+        address indexed delegatee
+    );
+
+    // ==============================================================================================
+    // ================================= ERRORS ====================================================
+    // ==============================================================================================
+
+    // Note: UnauthorizedCaller() error is inherited from IBasedApp
 }

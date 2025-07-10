@@ -36,6 +36,9 @@ abstract contract SSVBasedAppMiddlewareStorage {
     /// @notice Minimum collateral required for validator registration
     uint256 public REGISTRATION_MIN_COLLATERAL;
 
+    /// @notice Address of the SSV Based Apps Network for direct manager calls
+    address public SSV_BASED_APPS_NETWORK;
+
     // ==============================================================================================
     // ================================= STORAGE VARIABLES =========================================
     // ==============================================================================================

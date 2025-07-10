@@ -8,7 +8,8 @@ import { TransparentUpgradeableProxy } from
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 
-import { IBasedAppCompat } from "../src/interfaces/IBasedAppCompat.sol";
+import { IBasedApp } from "../src/interfaces/IBasedApp.sol";
+import { IBasedAppManager } from "../src/interfaces/IBasedAppManager.sol";
 
 import { IPubkeyRegistry } from "../src/interfaces/IPubkeyRegistry.sol";
 import { ISsvBasedAppMiddleware } from "../src/interfaces/ISsvBasedAppMiddleware.sol";
@@ -70,9 +71,9 @@ contract SSVBasedAppMiddlewareTest is Test {
 
     // Events for testing
     event StateChanged(string newState);
-    event BAppRegistered(string metadataURI, IBasedAppCompat.TokenConfig[] tokenConfigs);
+    event BAppRegistered(string metadataURI, IBasedAppManager.TokenConfig[] tokenConfigs);
     event BAppMetadataUpdated(string metadataURI);
-    event BAppTokensUpdated(IBasedAppCompat.TokenConfig[] tokenConfigs);
+    event BAppTokensUpdated(IBasedAppManager.TokenConfig[] tokenConfigs);
     event OperatorOptedIn(address indexed operator, uint32 indexed strategyId);
     event ValidatorsRegistered(
         address indexed operator, bytes32 indexed registrationRoot
@@ -178,8 +179,9 @@ contract SSVBasedAppMiddlewareTest is Test {
                 slasher: address(slasher),
                 gatewayOperatorSet: gatewayOperator,
                 gatewayNetwork: gatewayNetwork,
-                registrationMinCollateral: REGISTRATION_MIN_COLLATERAL
-            })
+                registrationMinCollateral: REGISTRATION_MIN_COLLATERAL,
+                ssvBasedAppsNetwork: address(0) // Use zero address to skip external calls in tests
+             })
         );
 
         // Register SSV middleware in the restaking protocol map as SYMBIOTIC
@@ -216,9 +218,9 @@ contract SSVBasedAppMiddlewareTest is Test {
         // Test that non-owner cannot call owner functions
         vm.startPrank(operator);
 
-        IBasedAppCompat.TokenConfig[] memory tokenConfigs =
-            new IBasedAppCompat.TokenConfig[](1);
-        tokenConfigs[0] = IBasedAppCompat.TokenConfig({
+        IBasedAppManager.TokenConfig[] memory tokenConfigs =
+            new IBasedAppManager.TokenConfig[](1);
+        tokenConfigs[0] = IBasedAppManager.TokenConfig({
             token: makeAddr("token"),
             sharedRiskLevel: 1000
         });
@@ -240,13 +242,13 @@ contract SSVBasedAppMiddlewareTest is Test {
     // ==============================================================================================
 
     function testRegisterBApp() public {
-        IBasedAppCompat.TokenConfig[] memory tokenConfigs =
-            new IBasedAppCompat.TokenConfig[](2);
-        tokenConfigs[0] = IBasedAppCompat.TokenConfig({
+        IBasedAppManager.TokenConfig[] memory tokenConfigs =
+            new IBasedAppManager.TokenConfig[](2);
+        tokenConfigs[0] = IBasedAppManager.TokenConfig({
             token: makeAddr("token1"),
             sharedRiskLevel: 1000
         });
-        tokenConfigs[1] = IBasedAppCompat.TokenConfig({
+        tokenConfigs[1] = IBasedAppManager.TokenConfig({
             token: makeAddr("token2"),
             sharedRiskLevel: 2000
         });
@@ -277,9 +279,9 @@ contract SSVBasedAppMiddlewareTest is Test {
     }
 
     function testUpdateBAppTokens() public {
-        IBasedAppCompat.TokenConfig[] memory newTokenConfigs =
-            new IBasedAppCompat.TokenConfig[](1);
-        newTokenConfigs[0] = IBasedAppCompat.TokenConfig({
+        IBasedAppManager.TokenConfig[] memory newTokenConfigs =
+            new IBasedAppManager.TokenConfig[](1);
+        newTokenConfigs[0] = IBasedAppManager.TokenConfig({
             token: makeAddr("newToken"),
             sharedRiskLevel: 3000
         });
