@@ -32,6 +32,7 @@ remappings = [
   "@solady/=lib/solady/src",
 
   "@symbiotic-middleware-sdk/=lib/middleware-sdk/src/",
+  "@ssv-based-apps/=lib/based-applications/src/",
 
   "lib/eigenlayer-contracts/:@openzeppelin/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/",
   "lib/eigenlayer-contracts/:@openzeppelin-v4.9.0/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/contracts/",

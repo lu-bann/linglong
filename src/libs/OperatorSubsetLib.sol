@@ -23,6 +23,8 @@ library OperatorSubsetLib {
     uint32 constant EIGENLAYER_UNDERWRITER_SUBSET_ID = 1;
     uint32 constant SYMBIOTIC_VALIDATOR_SUBSET_ID = 2;
     uint32 constant SYMBIOTIC_UNDERWRITER_SUBSET_ID = 3;
+    uint32 constant SSV_VALIDATOR_SUBSET_ID = 4;
+    uint32 constant SSV_UNDERWRITER_SUBSET_ID = 5;
 
     /// @notice Structure to store linglong subsets with their members
     struct LinglongSubsets {
@@ -50,6 +52,11 @@ library OperatorSubsetLib {
     {
         return linglongSubsetId == SYMBIOTIC_VALIDATOR_SUBSET_ID
             || linglongSubsetId == SYMBIOTIC_UNDERWRITER_SUBSET_ID;
+    }
+
+    function isSSVProtocolID(uint32 linglongSubsetId) internal pure returns (bool) {
+        return linglongSubsetId == SSV_VALIDATOR_SUBSET_ID
+            || linglongSubsetId == SSV_UNDERWRITER_SUBSET_ID;
     }
     /// @notice Creates a linglong subset with protocol information using uint32 ID
     /// @dev Uses uint32 for linglong subset IDs

@@ -40,3 +40,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/Vectorized/solady
+[submodule "lib/based-applications"]
+	path = lib/based-applications
+	url = https://github.com/ssvlabs/based-applications
