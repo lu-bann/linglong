@@ -203,7 +203,7 @@ contract Deploy is Script, Test {
 
     // Deploy implementation contracts and initialize them
 
-    function deployImplementations() internal {
+    function deployImplementations(string memory outputDir) internal {
         string memory taiyiAddresses = "taiyiAddresses";
         // Deploy TaiyiRegistryCoordinator implementation and proxy
         TaiyiRegistryCoordinator registryCoordinatorImpl = new TaiyiRegistryCoordinator(
@@ -352,7 +352,8 @@ contract Deploy is Script, Test {
 
         string memory output = "output";
         string memory finalJ = vm.serializeString(output, "taiyiAddresses", addresses);
-        vm.writeJson(finalJ, "script/output/devnet/taiyiAddresses.json");
+        string memory outputPath = string.concat(outputDir, "/taiyiAddresses.json");
+        vm.writeJson(finalJ, outputPath);
     }
 
     function setupDevnetAddresses(
@@ -478,7 +479,7 @@ contract Deploy is Script, Test {
         setupProxies();
 
         // Deploy implementations
-        deployImplementations();
+        deployImplementations(outputDir);
 
         vm.stopBroadcast();
     }
