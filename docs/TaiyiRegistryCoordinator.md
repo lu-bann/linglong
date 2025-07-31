@@ -97,4 +97,4 @@ The coordinator is **read-only** during slashing. `LinglongSlasher` queries:
 
 
 ## External Links
-* EigenLayer **AVS registrar interface** – <https://github.com/Layr-Labs/eigenlayer-middleware-contracts/blob/main/src/contracts/interfaces/IAVSRegistrar.sol> 
+* EigenLayer **AVS registrar interface** – <https://github.com/Layr-Labs/eigenlayer-contracts/blob/main/src/contracts/interfaces/IAVSRegistrar.sol> 

@@ -97,5 +97,5 @@ sequenceDiagram
 ---
 
 ## References
-* URC Registry source – [`Registry.sol`](../lib/urc/src/Registry.sol)  
-* EigenLayer slashing interface – [`IAllocationManager.slashOperator`](https://github.com/Layr-Labs/eigenlayer-middleware-contracts/blob/main/src/contracts/core/AllocationManager.sol) 
+* URC Registry source – [`Registry.sol`](https://github.com/eth-fabric/urc/blob/5f18225c4d027b49084605129b7666a37ea13412/src/Registry.sol)  
+* EigenLayer slashing interface – [`IAllocationManager.slashOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/main/src/contracts/core/AllocationManager.sol) 

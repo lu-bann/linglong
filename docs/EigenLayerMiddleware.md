@@ -83,7 +83,7 @@ sequenceDiagram
 
 ## Validator Registration & Delegation
 
-*Registration* and *delegation* data structures come from URC's [`Registry.sol`](../lib/urc/src/Registry.sol).
+*Registration* and *delegation* data structures come from URC's [`Registry.sol`](https://github.com/eth-fabric/urc/blob/5f18225c4d027b49084605129b7666a37ea13412/src/Registry.sol).
 
 * `SignedRegistration` → BLS‐signed validator ID + owner
 * `SignedDelegation` → BLS‐signed delegation authorising a committer key
