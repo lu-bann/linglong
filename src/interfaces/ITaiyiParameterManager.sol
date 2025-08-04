@@ -27,7 +27,7 @@ interface ITaiyiParameterManager {
     /// @param _challengeBond The bond required to open a challenge.
     function setChallengeBond(uint256 _challengeBond) external;
 
-    /// @notice Set the challenge maxiumum duration.
+    /// @notice Set the challenge maximum duration.
     /// @param _challengeMaxDuration The maximum duration of a challenge.
     function setChallengeMaxDuration(uint256 _challengeMaxDuration) external;
 
